@@ -1,0 +1,6 @@
+{
+  "name": "Self-Improving Research Team",
+  "description": "ADK-orchestrated multi-agent research team with Mem0 MCP memory, loop-guarded agent callbacks, live status and token tracking, and autonomous skill generation & reload.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
