@@ -93,57 +93,122 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Input Control Box */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+      {/* Prominent Input Control Box */}
+      <div className="bg-white rounded-2xl border-2 border-indigo-100 shadow-sm p-6 space-y-4 relative overflow-hidden">
+        {/* Subtle decorative top accent line */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label htmlFor="research-topic-input" className="block text-sm font-semibold text-slate-800">
-                Submit Research Request to Team
-              </label>
-              <button
-                type="button"
-                id="btn-cold-reset"
-                onClick={onResetColdStart}
-                className="text-xs text-slate-500 hover:text-rose-600 flex items-center space-x-1 transition-colors"
-                title="Wipe Mem0 memory & reset all generated skills to zero state"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Cold Start Reset (Mem0 + Skills)</span>
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <label htmlFor="research-topic-input" className="block text-sm font-bold text-slate-900 tracking-tight">
+                    Research Topic & Prompt
+                  </label>
+                  <span className="text-[11px] text-slate-500">
+                    Type a research question, deep inquiry, or architectural comparison below
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
+                  isRunning
+                    ? 'bg-amber-100 text-amber-800 border border-amber-200 animate-pulse'
+                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                }`}>
+                  {isRunning ? '● Orchestrating Pipeline' : '● Ready For Input'}
+                </span>
+                <button
+                  type="button"
+                  id="btn-cold-reset"
+                  onClick={onResetColdStart}
+                  className="text-xs text-slate-500 hover:text-rose-600 px-2 py-1 rounded-md hover:bg-rose-50 border border-transparent hover:border-rose-200 flex items-center space-x-1 transition-all"
+                  title="Wipe Mem0 memory & reset all generated skills to zero state"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Cold Start Reset</span>
+                </button>
+              </div>
             </div>
 
-            <div className="relative">
-              <input
-                id="research-topic-input"
-                type="text"
-                value={topicInput}
-                onChange={e => setTopicInput(e.target.value)}
-                placeholder="e.g. Research local AI agent frameworks prioritizing privacy and self-hosting..."
-                disabled={isRunning}
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all disabled:opacity-50"
-              />
+            {/* High-Visibility Interactive Entry Box */}
+            <div className="relative group rounded-xl border-2 border-slate-300 focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-500/15 bg-slate-50/70 focus-within:bg-white shadow-inner transition-all">
+              <div className="flex items-start p-3">
+                <div className="shrink-0 pt-1 mr-3">
+                  <div className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center font-mono text-xs font-bold">
+                    ❯
+                  </div>
+                </div>
+
+                <textarea
+                  id="research-topic-input"
+                  rows={2}
+                  value={topicInput}
+                  onChange={e => setTopicInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }}
+                  placeholder="Enter subject for multi-agent autonomous investigation (e.g. Compare local LLM inference engines like vLLM vs Ollama with Mem0 memory)..."
+                  disabled={isRunning}
+                  className="w-full text-sm sm:text-base font-medium text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent focus:outline-none resize-none leading-relaxed"
+                />
+
+                {topicInput && !isRunning && (
+                  <button
+                    type="button"
+                    onClick={() => setTopicInput('')}
+                    className="shrink-0 text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-200 text-xs transition-colors"
+                    title="Clear input"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Bottom bar inside prompt container */}
+              <div className="px-3 pb-2.5 pt-1 border-t border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="font-mono text-[11px] text-slate-400 flex items-center">
+                  <span className="font-semibold text-slate-600 mr-1">Tip:</span> Press <kbd className="mx-1 px-1.5 py-0.5 bg-slate-200 text-slate-800 rounded font-mono text-[10px] shadow-2xs">Enter ↵</kbd> to launch, or use presets below
+                </span>
+
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-mono text-slate-400">{topicInput.length} chars</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Quick preset chips */}
+          {/* Quick preset chips with high visual clarity */}
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="text-xs text-slate-400 font-medium mr-1">Presets:</span>
+            <span className="text-xs text-slate-500 font-semibold flex items-center mr-1">
+              <Zap className="w-3.5 h-3.5 mr-1 text-amber-500" />
+              Quick Prompts:
+            </span>
             {presetTopics.map((preset, idx) => (
               <button
                 key={idx}
                 type="button"
                 id={`btn-preset-${idx}`}
                 onClick={() => setTopicInput(preset.query)}
-                className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 border border-slate-200 transition-colors"
+                className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-800 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 border border-slate-200 shadow-2xs transition-all active:scale-98"
               >
                 <span>{preset.title}</span>
-                <span className="ml-1.5 text-[10px] text-slate-400">({preset.badge})</span>
+                <span className="ml-1.5 text-[10px] text-slate-500 font-mono bg-white px-1.5 py-0.2 rounded border border-slate-200">
+                  {preset.badge}
+                </span>
               </button>
             ))}
           </div>
 
-          {/* Settings row */}
+          {/* Settings & Launch Controls */}
           <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-slate-100">
             <label className="flex items-center space-x-2 text-xs text-slate-700 cursor-pointer select-none">
               <input
@@ -164,7 +229,7 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
                   id="btn-stop-research-panel"
                   onClick={onStopResearch}
                   disabled={isStopping}
-                  className="inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                  className="inline-flex items-center px-4 py-2.5 rounded-xl text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition-all active:scale-95 disabled:opacity-50"
                   title="Stop agent orchestration at will"
                 >
                   <Square className="w-4 h-4 mr-1.5 fill-current" />
@@ -176,7 +241,7 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
                 type="submit"
                 id="btn-launch-research"
                 disabled={isRunning || !topicInput.trim()}
-                className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-6 py-2.5 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg transition-all active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
               >
                 {isRunning ? (
                   <>

@@ -97,18 +97,50 @@ export const MinimalLayout: React.FC<MinimalLayoutProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="minimal-topic" className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-              Research Query / Topic:
-            </label>
-            <textarea
-              id="minimal-topic"
-              value={topic}
-              onChange={e => setTopic(e.target.value)}
-              rows={2}
-              disabled={isRunning}
-              className="w-full p-3 text-sm font-sans bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:ring-2 focus:ring-slate-800 focus:outline-none"
-              placeholder="Enter subject for autonomous investigation..."
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label htmlFor="minimal-topic" className="flex items-center text-xs font-bold text-slate-800 uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5 mr-1 text-indigo-600" />
+                Research Query / Prompt Entry:
+              </label>
+              <span className="text-[11px] font-mono text-slate-400">
+                Press Enter to run
+              </span>
+            </div>
+
+            <div className="relative rounded-xl border-2 border-slate-300 focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-500/15 bg-slate-50/70 focus-within:bg-white shadow-inner transition-all">
+              <div className="flex items-start p-3">
+                <div className="shrink-0 pt-0.5 mr-2.5">
+                  <div className="w-5 h-5 rounded bg-indigo-100 text-indigo-700 flex items-center justify-center font-mono text-xs font-bold">
+                    ❯
+                  </div>
+                </div>
+                <textarea
+                  id="minimal-topic"
+                  value={topic}
+                  onChange={e => setTopic(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }}
+                  rows={2}
+                  disabled={isRunning}
+                  className="w-full text-sm font-medium text-slate-900 placeholder:text-slate-400 placeholder:font-normal bg-transparent focus:outline-none resize-none leading-relaxed"
+                  placeholder="Type or paste your research prompt here (e.g. Compare local LLM inference engines with Mem0 memory)..."
+                />
+                {topic && !isRunning && (
+                  <button
+                    type="button"
+                    onClick={() => setTopic('')}
+                    className="shrink-0 text-slate-400 hover:text-slate-600 p-1 rounded hover:bg-slate-200 text-xs transition-colors"
+                    title="Clear prompt"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
