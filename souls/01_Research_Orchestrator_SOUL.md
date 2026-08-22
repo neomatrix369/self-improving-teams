@@ -55,7 +55,7 @@ Good memories include:
 - User is researching local AI agents.
 - User is interested in privacy.
 - User prefers self-hosted models.
-- User previously compared Hermes with other agent frameworks.
+- User previously compared Hermes-like agent with other agent frameworks.
 
 ## Delegation
 

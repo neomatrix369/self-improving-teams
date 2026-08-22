@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.0-61dafb.svg)](https://react.dev/)
-[![Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Pro_%7C_Flash-orange.svg)](https://ai.google.dev/)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-3.7_Flash-orange.svg)](https://ai.google.dev/)
 [![Mem0](https://img.shields.io/badge/Mem0-MCP_Server-emerald.svg)](https://mem0.ai/)
 
 An enterprise-grade, multi-agent autonomous research system orchestrated by Google Agent Development Kit (ADK) principles, powered by Google Gemini models, and backed by long-term memory via the **Mem0 Model Context Protocol (MCP)** server. The system features autonomous skill synthesis, real-time token and budget tracking, execution loop guards, and hot-reloadable agent souls.
@@ -44,7 +44,7 @@ An enterprise-grade, multi-agent autonomous research system orchestrated by Goog
 |             |                            |                             |                      |
 |             v                            v                             v                      |
 |  +---------------------+    +-------------------------+   +--------------------------------+  |
-|  |  Scout Agent        |    |  Critic Agent           |   |  Hermes Evolver Agent          |  |
+|  |  Scout Agent        |    |  Critic Agent           |   |  Hermes-like Evolver Agent     |  |
 |  |  - Deep Query       |    |  - Hallucination Audits |   |  - Skill Synthesis             |  |
 |  |  - Source Synthesis |    |  - Logical Coherence    |   |  - Meta-Evolution (.soul.md)   |  |
 |  +---------------------+    +-------------------------+   +--------------------------------+  |
@@ -78,7 +78,7 @@ graph TD
     
     ContextEnriched --> Scout[Scout Agent: Investigation]
     Scout --> Critic[Critic Agent: Verification & Fact-Audit]
-    Critic --> Hermes[Hermes Agent: Skill Synthesis]
+    Critic --> Hermes[Hermes-like agent: Skill Synthesis]
     
     Hermes --> SkillGen[Synthesize SKILL.md / Agent Soul]
     Hermes --> StoreMem0[Mem0: add_memory_tool]
@@ -90,7 +90,7 @@ graph TD
 
 ## ⚡ Key Capabilities
 
-- **ADK Multi-Agent Orchestration**: Specialized Scout, Critic, and Hermes Evolver agents run in coordinated pipelines with step-level status tracking and loop-guard timeouts.
+- **ADK Multi-Agent Orchestration**: Specialized Scout, Critic, and Hermes-like Evolver agents run in coordinated pipelines with step-level status tracking and loop-guard timeouts.
 - **Mem0 MCP Server Integration**:
   - Direct HTTP JSON-RPC 2.0 client communicating with local Mem0 MCP server.
   - Native support for **all 9 Mem0 tools** (`add_memory_tool`, `search_memories_tool`, `get_memory_tool`, `get_all_memories_tool`, `update_memory_tool`, `memory_history_tool`, `delete_memory_tool`, `delete_all_memories_tool`, `reset_memories_tool`).
@@ -105,10 +105,10 @@ graph TD
 
 | Agent | Model | Primary Responsibility |
 | :--- | :--- | :--- |
-| **Orchestrator** | Gemini 2.5 Pro | Deconstructs user query, manages execution DAG, interacts with Mem0 MCP, compiles final report |
-| **Scout** | Gemini 2.5 Flash | Discovers primary domain sources, identifies technical trade-offs, gathers core evidence |
-| **Critic** | Gemini 2.5 Flash | Verifies claims, conducts hallucination audits, calculates confidence scores |
-| **Hermes Evolver** | Gemini 2.5 Pro | Identifies capability gaps, creates durable skills (`SKILL.md`), updates agent souls (`.soul.md`) |
+| **Orchestrator** | Gemini 3.7 Flash | Deconstructs user query, manages execution DAG, interacts with Mem0 MCP, compiles final report |
+| **Scout** | Gemini 3.7 Flash | Discovers primary domain sources, identifies technical trade-offs, gathers core evidence |
+| **Critic** | Gemini 3.7 Flash | Verifies claims, conducts hallucination audits, calculates confidence scores |
+| **Hermes-like agent** | Gemini 3.7 Flash | Identifies capability gaps, creates durable skills (`SKILL.md`), updates agent souls (`.soul.md`) |
 
 ---
 
@@ -192,7 +192,7 @@ The application contains a unified Mem0 engine (`server/mem0Store.ts`) that hand
 │   ├── cliRunner.ts        # Interactive developer terminal commands
 │   ├── geminiClient.ts     # Resilient Google GenAI SDK interface with rate limiting
 │   ├── mem0Store.ts        # Unified Mem0 MCP Client & Mock Store
-│   └── skillStore.ts       # SKILL.md and Hermes SOUL hot-reloading manager
+│   └── skillManager.ts     # SKILL.md and Hermes-like agent SOUL hot-reloading manager
 ├── skills/                 # Dynamically generated & system SKILL.md files
 ├── souls/                  # Agent personality & metacognition profiles
 ├── src/
