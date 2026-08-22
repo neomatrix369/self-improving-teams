@@ -50,6 +50,18 @@ async function startServer() {
     }
   });
 
+  // Stop active research run(s)
+  app.post('/api/research/stop', (req, res) => {
+    try {
+      const { runId } = req.body || {};
+      const result = agentOrchestrator.stopResearch(runId);
+      res.json(result);
+    } catch (err: any) {
+      console.error('Error stopping research:', err);
+      res.status(500).json({ error: err.message || 'Failed to stop research run' });
+    }
+  });
+
   // Get run status by ID
   app.get('/api/research/status/:id', (req, res) => {
     const run = agentOrchestrator.getRun(req.params.id);
@@ -64,37 +76,71 @@ async function startServer() {
     res.json(agentOrchestrator.getAllRuns());
   });
 
-  // Mem0 MCP endpoints
-  app.get('/api/mem0/memories', (req, res) => {
-    const query = req.query.q as string;
-    const category = req.query.category as string;
-    if (query) {
-      const results = mem0Store.searchMemory(query);
-      return res.json(results);
-    }
-    const results = mem0Store.listMemories(category ? { category } : undefined);
-    res.json(results);
+  // Mem0 MCP endpoints & Configuration
+  app.get('/api/mem0/config', (req, res) => {
+    res.json(mem0Store.getConfig());
   });
 
-  app.post('/api/mem0/memory', (req, res) => {
+  app.post('/api/mem0/config', async (req, res) => {
+    try {
+      const updated = await mem0Store.setConfig(req.body);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/mem0/test-connection', async (req, res) => {
+    try {
+      const result = await mem0Store.testConnection(req.body?.url);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/mem0/memories', async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      const category = req.query.category as string;
+      if (query) {
+        const results = await mem0Store.searchMemory(query);
+        return res.json(results);
+      }
+      const results = await mem0Store.listMemories(category ? { category } : undefined);
+      res.json(results);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/mem0/memory', async (req, res) => {
     try {
       const { text, category, relations, tags } = req.body;
       if (!text) return res.status(400).json({ error: 'Text is required' });
-      const result = mem0Store.addMemories([{ text, category, relations, tags }], 'orchestrator');
+      const result = await mem0Store.addMemories([{ text, category, relations, tags }], 'orchestrator');
       res.json(result);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
   });
 
-  app.delete('/api/mem0/memory/:id', (req, res) => {
-    const success = mem0Store.deleteMemory(req.params.id);
-    res.json({ success });
+  app.delete('/api/mem0/memory/:id', async (req, res) => {
+    try {
+      const success = await mem0Store.deleteMemory(req.params.id);
+      res.json({ success });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
-  app.post('/api/mem0/reset', (req, res) => {
-    mem0Store.resetMemories();
-    res.json({ success: true, message: 'Mem0 long-term memory reset to cold-start zero state.' });
+  app.post('/api/mem0/reset', async (req, res) => {
+    try {
+      await mem0Store.resetMemories();
+      res.json({ success: true, message: 'Mem0 long-term memory reset to zero state.' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // Autonomous Skills endpoints

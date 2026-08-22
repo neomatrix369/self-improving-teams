@@ -15,6 +15,8 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Square,
+  AlertCircle,
 } from 'lucide-react';
 import { ResearchRun } from '../types';
 
@@ -25,6 +27,8 @@ interface MinimalLayoutProps {
   onResetColdStart: () => void;
   mem0Count: number;
   skillsCount: number;
+  onStopResearch?: () => void;
+  isStopping?: boolean;
 }
 
 export const MinimalLayout: React.FC<MinimalLayoutProps> = ({
@@ -34,6 +38,8 @@ export const MinimalLayout: React.FC<MinimalLayoutProps> = ({
   onResetColdStart,
   mem0Count,
   skillsCount,
+  onStopResearch,
+  isStopping,
 }) => {
   const [topic, setTopic] = useState('Local AI Agents: Privacy-Preserving Self-Hosted Inference Frameworks');
   const [triggerCallback, setTriggerCallback] = useState(true);
@@ -116,23 +122,39 @@ export const MinimalLayout: React.FC<MinimalLayoutProps> = ({
               <span>Enable Loop-Guarded Agent Callbacks (Max 1x per pair)</span>
             </label>
 
-            <button
-              type="submit"
-              disabled={isRunning || !topic.trim()}
-              className="px-5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm disabled:opacity-50 flex items-center space-x-2"
-            >
-              {isRunning ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Executing Pipeline...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Submit Research Request</span>
-                </>
+            <div className="flex items-center space-x-2">
+              {isRunning && onStopResearch && (
+                <button
+                  type="button"
+                  id="btn-minimal-stop-agents"
+                  onClick={onStopResearch}
+                  disabled={isStopping}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm disabled:opacity-50 flex items-center space-x-1.5 active:scale-95 transition-all"
+                  title="Stop agent orchestration at will"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>{isStopping ? 'Stopping...' : 'Stop Agents'}</span>
+                </button>
               )}
-            </button>
+
+              <button
+                type="submit"
+                disabled={isRunning || !topic.trim()}
+                className="px-5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm disabled:opacity-50 flex items-center space-x-2"
+              >
+                {isRunning ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Executing Pipeline...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Submit Research Request</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -145,16 +167,29 @@ export const MinimalLayout: React.FC<MinimalLayoutProps> = ({
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                 Execution Pipeline Status:
               </span>
+              {isRunning && onStopResearch && (
+                <button
+                  type="button"
+                  onClick={onStopResearch}
+                  disabled={isStopping}
+                  className="px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-800 hover:bg-rose-200 flex items-center space-x-1"
+                >
+                  <Square className="w-2.5 h-2.5 fill-current" />
+                  <span>{isStopping ? 'Stopping...' : 'Stop'}</span>
+                </button>
+              )}
               <span
                 className={`px-2 py-0.5 rounded text-xs font-mono font-semibold ${
                   currentRun.status === 'completed'
                     ? 'bg-emerald-100 text-emerald-800'
                     : currentRun.status === 'running'
                     ? 'bg-amber-100 text-amber-800 animate-pulse'
+                    : currentRun.status === 'cancelled'
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
                     : 'bg-rose-100 text-rose-800'
                 }`}
               >
-                {currentRun.status.toUpperCase()}
+                {currentRun.status === 'cancelled' ? 'STOPPED' : currentRun.status.toUpperCase()}
               </span>
             </div>
 
@@ -166,6 +201,13 @@ export const MinimalLayout: React.FC<MinimalLayoutProps> = ({
               {showLogs ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
           </div>
+
+          {currentRun.status === 'cancelled' && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-900 flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Orchestration was cancelled by user. Partial findings and token metrics preserved.</span>
+            </div>
+          )}
 
           {/* Divergence banner */}
           {currentRun.divergenceDecision && (

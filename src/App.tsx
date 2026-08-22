@@ -18,6 +18,7 @@ export default function App() {
   const [currentRun, setCurrentRun] = useState<ResearchRun | null>(null);
   const [runHistory, setRunHistory] = useState<ResearchRun[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [mem0Count, setMem0Count] = useState(0);
   const [skillsCount, setSkillsCount] = useState(0);
 
@@ -76,6 +77,7 @@ export default function App() {
           setCurrentRun(updatedRun);
           if (updatedRun.status !== 'running') {
             setIsRunning(false);
+            setIsStopping(false);
             fetchGlobalStats();
           }
         }
@@ -92,6 +94,7 @@ export default function App() {
     options: { triggerCallbackDemo: boolean }
   ) => {
     setIsRunning(true);
+    setIsStopping(false);
     setActiveTab('workflow');
 
     try {
@@ -114,7 +117,35 @@ export default function App() {
       fetchGlobalStats();
     } catch (e: any) {
       console.error('Failed to launch research:', e);
+    } finally {
       setIsRunning(false);
+      setIsStopping(false);
+    }
+  };
+
+  const handleStopResearch = async () => {
+    if (!isRunning) return;
+    setIsStopping(true);
+    try {
+      await fetch('/api/research/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: currentRun?.id }),
+      });
+
+      if (currentRun?.id) {
+        const res = await fetch(`/api/research/status/${currentRun.id}`);
+        if (res.ok) {
+          const updated: ResearchRun = await res.json();
+          setCurrentRun(updated);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to stop research:', e);
+    } finally {
+      setIsRunning(false);
+      setIsStopping(false);
+      fetchGlobalStats();
     }
   };
 
@@ -138,6 +169,8 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isRunning={isRunning}
+        isStopping={isStopping}
+        onStopResearch={handleStopResearch}
         mem0Count={mem0Count}
         skillsCount={skillsCount}
         layoutMode={layoutMode}
@@ -150,7 +183,9 @@ export default function App() {
           <MinimalLayout
             currentRun={currentRun}
             isRunning={isRunning}
+            isStopping={isStopping}
             onStartResearch={handleStartResearch}
+            onStopResearch={handleStopResearch}
             onResetColdStart={handleResetColdStart}
             mem0Count={mem0Count}
             skillsCount={skillsCount}
@@ -162,6 +197,8 @@ export default function App() {
           <TerminalFirstLayout
             currentRun={currentRun}
             isRunning={isRunning}
+            isStopping={isStopping}
+            onStopResearch={handleStopResearch}
             mem0Count={mem0Count}
             skillsCount={skillsCount}
             onRefresh={fetchGlobalStats}
@@ -178,7 +215,9 @@ export default function App() {
                   <WorkflowPanel
                     currentRun={currentRun}
                     isRunning={isRunning}
+                    isStopping={isStopping}
                     onStartResearch={handleStartResearch}
+                    onStopResearch={handleStopResearch}
                     onResetColdStart={handleResetColdStart}
                     runHistory={runHistory}
                     onSelectRun={run => setCurrentRun(run)}

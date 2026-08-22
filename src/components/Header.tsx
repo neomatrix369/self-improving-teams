@@ -10,7 +10,10 @@ import {
   LayoutGrid,
   LayoutList,
   Columns,
+  Eye,
+  Square,
 } from 'lucide-react';
+import { LayoutsPreviewModal } from './LayoutsPreviewModal';
 
 export type UILayoutMode = 'studio' | 'minimal' | 'terminal';
 
@@ -22,6 +25,8 @@ interface HeaderProps {
   skillsCount: number;
   layoutMode: UILayoutMode;
   setLayoutMode: (mode: UILayoutMode) => void;
+  onStopResearch?: () => void;
+  isStopping?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,7 +37,11 @@ export const Header: React.FC<HeaderProps> = ({
   skillsCount,
   layoutMode,
   setLayoutMode,
+  onStopResearch,
+  isStopping,
 }) => {
+  const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
+
   const tabs = [
     { id: 'workflow', label: 'Research Workflow', icon: Bot },
     { id: 'mem0', label: `Mem0 Memory (${mem0Count})`, icon: Database },
@@ -111,12 +120,39 @@ export const Header: React.FC<HeaderProps> = ({
                 <Terminal className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">Terminal</span>
               </button>
+
+              <div className="h-4 w-px bg-slate-300 mx-1 hidden sm:block" />
+
+              {/* Visual Preview Button */}
+              <button
+                id="btn-open-preview-modal"
+                onClick={() => setIsPreviewOpen(true)}
+                className="flex items-center space-x-1 px-2 py-1 rounded font-medium text-indigo-600 hover:bg-indigo-50 transition-colors"
+                title="Visual Preview & Guide for All UI Layouts"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span className="font-semibold hidden lg:inline">Preview All</span>
+              </button>
             </div>
 
             {isRunning && (
-              <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
-                <Zap className="w-3.5 h-3.5 mr-1 text-amber-600 animate-spin" />
-                <span className="hidden sm:inline">Pipeline Active</span>
+              <div className="flex items-center space-x-2">
+                <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
+                  <Zap className="w-3.5 h-3.5 mr-1 text-amber-600 animate-spin" />
+                  <span className="hidden sm:inline">Pipeline Active</span>
+                </div>
+                {onStopResearch && (
+                  <button
+                    id="btn-header-stop-agent"
+                    onClick={onStopResearch}
+                    disabled={isStopping}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-all active:scale-95 disabled:opacity-50"
+                    title="Stop running agent pipeline immediately"
+                  >
+                    <Square className="w-3 h-3 fill-current" />
+                    <span>{isStopping ? 'Stopping...' : 'Stop'}</span>
+                  </button>
+                )}
               </div>
             )}
             <div className="hidden lg:flex items-center space-x-2 text-xs text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
@@ -151,6 +187,17 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </div>
+
+      {/* Visual Layouts Preview Modal */}
+      <LayoutsPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        currentMode={layoutMode}
+        onSelectMode={(mode) => {
+          setLayoutMode(mode);
+          setIsPreviewOpen(false);
+        }}
+      />
     </header>
   );
 };

@@ -15,6 +15,8 @@ import {
   Cpu,
   RefreshCw,
   Zap,
+  Square,
+  AlertCircle,
 } from 'lucide-react';
 import { ResearchRun, AgentStepEvent, AgentType } from '../types';
 
@@ -25,6 +27,8 @@ interface WorkflowPanelProps {
   onResetColdStart: () => void;
   runHistory: ResearchRun[];
   onSelectRun: (run: ResearchRun) => void;
+  onStopResearch?: () => void;
+  isStopping?: boolean;
 }
 
 export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
@@ -34,6 +38,8 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
   onResetColdStart,
   runHistory,
   onSelectRun,
+  onStopResearch,
+  isStopping,
 }) => {
   const [topicInput, setTopicInput] = useState('Local AI Agents: Privacy-Preserving Self-Hosted Inference Frameworks');
   const [enableCallbackDemo, setEnableCallbackDemo] = useState(true);
@@ -151,24 +157,40 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
               <span className="text-slate-400">(Max 1 call per pair: Analysis ➔ Research, Synthesis ➔ Analysis)</span>
             </label>
 
-            <button
-              type="submit"
-              id="btn-launch-research"
-              disabled={isRunning || !topicInput.trim()}
-              className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isRunning ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Agents Orchestrating...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2 fill-current" />
-                  Launch Research Team
-                </>
+            <div className="flex items-center space-x-2">
+              {isRunning && onStopResearch && (
+                <button
+                  type="button"
+                  id="btn-stop-research-panel"
+                  onClick={onStopResearch}
+                  disabled={isStopping}
+                  className="inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+                  title="Stop agent orchestration at will"
+                >
+                  <Square className="w-4 h-4 mr-1.5 fill-current" />
+                  {isStopping ? 'Stopping...' : 'Stop Agents'}
+                </button>
               )}
-            </button>
+
+              <button
+                type="submit"
+                id="btn-launch-research"
+                disabled={isRunning || !topicInput.trim()}
+                className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRunning ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Orchestrating...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 mr-2 fill-current" />
+                    Launch Research Team
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -185,19 +207,40 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
             </div>
             <div className="flex items-center space-x-2 text-xs">
               <span className="font-mono text-slate-500">Run ID: {currentRun.id}</span>
+              {isRunning && onStopResearch && (
+                <button
+                  type="button"
+                  id="btn-stepper-stop"
+                  onClick={onStopResearch}
+                  disabled={isStopping}
+                  className="px-2 py-0.5 rounded font-medium bg-rose-100 text-rose-800 hover:bg-rose-200 transition-colors flex items-center space-x-1"
+                >
+                  <Square className="w-2.5 h-2.5 fill-current" />
+                  <span>{isStopping ? 'Stopping...' : 'Stop'}</span>
+                </button>
+              )}
               <span
                 className={`px-2 py-0.5 rounded-full font-medium ${
                   currentRun.status === 'completed'
                     ? 'bg-emerald-100 text-emerald-800'
                     : currentRun.status === 'running'
                     ? 'bg-amber-100 text-amber-800 animate-pulse'
+                    : currentRun.status === 'cancelled'
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300 font-semibold'
                     : 'bg-rose-100 text-rose-800'
                 }`}
               >
-                {currentRun.status.toUpperCase()}
+                {currentRun.status === 'cancelled' ? 'STOPPED' : currentRun.status.toUpperCase()}
               </span>
             </div>
           </div>
+
+          {currentRun.status === 'cancelled' && (
+            <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-lg flex items-center space-x-2 text-xs text-amber-900">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Orchestration was cancelled at will by user. Partial token usage and generated outputs preserved below.</span>
+            </div>
+          )}
 
           {/* Amended SOUL Interactive Flow Diagram */}
           <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-lg">

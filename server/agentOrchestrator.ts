@@ -21,9 +21,50 @@ const REPORTS_DIR = path.join(process.cwd(), 'reports');
 export class AgentOrchestrator {
   private activeRuns: Map<string, ResearchRun> = new Map();
   private runHistory: ResearchRun[] = [];
+  private cancelledRuns: Set<string> = new Set();
 
   constructor() {
     this.ensureReportsDir();
+  }
+
+  public stopResearch(runId?: string): { success: boolean; message: string; stoppedRunIds: string[] } {
+    const stoppedRunIds: string[] = [];
+
+    if (runId) {
+      if (this.activeRuns.has(runId)) {
+        this.cancelledRuns.add(runId);
+        stoppedRunIds.push(runId);
+        const run = this.activeRuns.get(runId);
+        if (run) {
+          run.status = 'cancelled';
+          run.error = 'Orchestration stopped by user request.';
+          this.addStepEvent(run, 'system', 'Pipeline Terminated', 'failed', 'Orchestration manually stopped by user.');
+        }
+      }
+    } else {
+      // Stop all active runs
+      for (const [id, run] of this.activeRuns.entries()) {
+        this.cancelledRuns.add(id);
+        stoppedRunIds.push(id);
+        run.status = 'cancelled';
+        run.error = 'Orchestration stopped by user request.';
+        this.addStepEvent(run, 'system', 'Pipeline Terminated', 'failed', 'Orchestration manually stopped by user.');
+      }
+    }
+
+    return {
+      success: stoppedRunIds.length > 0,
+      message: stoppedRunIds.length > 0
+        ? `Successfully sent stop signal to ${stoppedRunIds.length} active run(s).`
+        : 'No active runs were found to stop.',
+      stoppedRunIds,
+    };
+  }
+
+  private checkAborted(runId: string, run: ResearchRun) {
+    if (this.cancelledRuns.has(runId) || run.status === 'cancelled') {
+      throw new Error('ORCHESTRATION_CANCELLED_BY_USER');
+    }
   }
 
   private ensureReportsDir() {
@@ -171,19 +212,21 @@ export class AgentOrchestrator {
       // ----------------------------------------------------
       // STEP 1: Cold start / Retrieve relevant context from Mem0 MCP
       // ----------------------------------------------------
-      this.addStepEvent(run, 'mem0_mcp', 'search_memory', 'running', `Searching long-term memory for topic: "${topic}"`);
-      const retrievedMemories = mem0Store.searchMemory(topic, 8);
-      const allGraphRelations = mem0Store.getAllGraphRelations();
+      this.checkAborted(runId, run);
+      this.addStepEvent(run, 'mem0_mcp', 'search_memories_tool', 'running', `Searching long-term memory for topic: "${topic}"`);
+      const retrievedMemories = await mem0Store.searchMemory(topic, 8);
+      const allGraphRelations = await mem0Store.getAllGraphRelations();
+      const allMemsCount = (await mem0Store.listMemories()).length;
 
       this.addStepEvent(
         run,
         'mem0_mcp',
-        'search_memory',
+        'search_memories_tool',
         'completed',
         retrievedMemories.length > 0
           ? `Retrieved ${retrievedMemories.length} relevant memories from Mem0 MCP.`
           : 'Cold start: No prior memories found in Mem0 MCP.',
-        { retrievedMemories, totalStored: mem0Store.listMemories().length }
+        { retrievedMemories, totalStored: allMemsCount }
       );
 
       const memoryContextText = retrievedMemories.length > 0
@@ -193,6 +236,7 @@ export class AgentOrchestrator {
       // ----------------------------------------------------
       // STEP 2.5: Orchestrator Divergence Decision
       // ----------------------------------------------------
+      this.checkAborted(runId, run);
       this.addStepEvent(run, 'orchestrator', 'Divergence Decision (Step 2.5)', 'running', 'Orchestrator evaluating single topic vs multi-subtopic divergence...');
       const orchInstruction = this.getAgentInstruction('orchestrator');
 
@@ -214,6 +258,7 @@ Output valid JSON only in the following format:
       const divergenceResult = await callGeminiModel(orchInstruction, divergencePrompt, {
         responseMimeType: 'application/json',
       });
+      this.checkAborted(runId, run);
 
       let divergenceData: DivergenceDecision;
       try {
@@ -244,6 +289,7 @@ Output valid JSON only in the following format:
       // ----------------------------------------------------
       // STEP 3: Research Agent Execution
       // ----------------------------------------------------
+      this.checkAborted(runId, run);
       this.addStepEvent(run, 'research', 'Investigation & Fact Discovery', 'running', 'Research Agent investigating subtopics and identifying developments...');
       const researchInstruction = this.getAgentInstruction('research');
 
@@ -261,6 +307,7 @@ Execute your mission and produce a structured Research Brief conforming to your 
 Never fabricate sources or speculate as fact.`;
 
       const researchResult = await callGeminiModel(researchInstruction, researchPrompt);
+      this.checkAborted(runId, run);
       run.researchBrief = researchResult.text;
       run.tokenSummary.research = this.combineUsage(run.tokenSummary.research, researchResult.usage);
 
@@ -281,6 +328,7 @@ Never fabricate sources or speculate as fact.`;
 
       // Check if Analysis wants to trigger a callback to Research (or triggered via demo flag)
       if (options?.triggerCallbackDemo && loopGuard.analysisToResearchCallbacks < loopGuard.maxCallbacksPerPair) {
+        this.checkAborted(runId, run);
         loopGuard.analysisToResearchCallbacks += 1;
 
         const callbackQuery = `Please provide a specialized, deeper breakdown with specific benchmark metrics or protocol details regarding "${topic}" to validate architectural viability.`;
@@ -299,6 +347,7 @@ Original Context: "${topic}"
 Provide a concise, evidence-driven supplemental fact sheet with concrete details and benchmarks.`;
 
         const callbackResult = await callGeminiModel(researchInstruction, callbackPrompt);
+        this.checkAborted(runId, run);
         const callbackTokens = callbackResult.usage;
 
         run.tokenSummary.callbacks = this.combineUsage(run.tokenSummary.callbacks, callbackTokens);
@@ -330,6 +379,7 @@ Provide a concise, evidence-driven supplemental fact sheet with concrete details
       // ----------------------------------------------------
       // STEP 5: Analysis Agent Execution
       // ----------------------------------------------------
+      this.checkAborted(runId, run);
       this.addStepEvent(run, 'analysis', 'Reasoning & Knowledge Graph Connection', 'running', 'Analysis Agent synthesizing findings, changes, and knowledge graph relations...');
       const analysisInstruction = this.getAgentInstruction('analysis');
 
@@ -348,6 +398,7 @@ Perform your mission: Determine what changed, what remains true, how concepts re
 Produce your structured # Analysis output with ## Research Context, ## New Information, ## Changes, ## Connections, ## Insights, ## Contradictions, ## Knowledge Gaps, ## Recommended Next Steps, and ## Potential Mem0 Updates (including relationship triples).`;
 
       const analysisResult = await callGeminiModel(analysisInstruction, analysisPrompt);
+      this.checkAborted(runId, run);
       run.analysisReport = analysisResult.text;
       run.tokenSummary.analysis = this.combineUsage(run.tokenSummary.analysis, analysisResult.usage);
 
@@ -368,6 +419,7 @@ Produce your structured # Analysis output with ## Research Context, ## New Infor
 
       // Optional callback check from Synthesis -> Analysis
       if (options?.triggerCallbackDemo && loopGuard.synthesisToAnalysisCallbacks < loopGuard.maxCallbacksPerPair) {
+        this.checkAborted(runId, run);
         loopGuard.synthesisToAnalysisCallbacks += 1;
 
         const synthCallbackQuery = `Clarify the concrete mechanism connecting the privacy/self-hosted aspects to local execution before stating final conclusions.`;
@@ -384,6 +436,7 @@ Question: "${synthCallbackQuery}"
 Clarify the specific reasoning connecting the findings so Synthesis can present it accurately.`;
 
         const synthCallbackResult = await callGeminiModel(analysisInstruction, synthCallbackPrompt);
+        this.checkAborted(runId, run);
         const synthCbTokens = synthCallbackResult.usage;
 
         run.tokenSummary.callbacks = this.combineUsage(run.tokenSummary.callbacks, synthCbTokens);
@@ -415,6 +468,7 @@ Clarify the specific reasoning connecting the findings so Synthesis can present 
       // ----------------------------------------------------
       // STEP 7: Synthesis Agent Execution
       // ----------------------------------------------------
+      this.checkAborted(runId, run);
       this.addStepEvent(run, 'synthesis', 'Final Report Synthesis', 'running', 'Synthesis Agent compiling final user-facing response with historical context...');
       const synthesisInstruction = this.getAgentInstruction('synthesis');
 
@@ -442,6 +496,7 @@ Follow your format:
 Do not expose internal memory candidate formatting or hidden tool calls. Preserve accuracy, uncertainty, and highlight continuity across sessions.`;
 
       const synthesisResult = await callGeminiModel(synthesisInstruction, synthesisPrompt);
+      this.checkAborted(runId, run);
       run.synthesisReport = synthesisResult.text;
       run.tokenSummary.synthesis = this.combineUsage(run.tokenSummary.synthesis, synthesisResult.usage);
 
@@ -467,6 +522,7 @@ Do not expose internal memory candidate formatting or hidden tool calls. Preserv
       // ----------------------------------------------------
       // STEP 8: Durable Memory Write (Orchestrator -> Mem0 MCP)
       // ----------------------------------------------------
+      this.checkAborted(runId, run);
       this.addStepEvent(run, 'orchestrator', 'Durable Memory Extraction & MCP Commit', 'running', 'Orchestrator reviewing candidate memories and writing to Mem0 MCP...');
 
       const memExtractPrompt = `You are the Research Orchestrator.
@@ -497,7 +553,7 @@ Output valid JSON in the following schema:
       const memExtractResult = await callGeminiModel(orchInstruction, memExtractPrompt, {
         responseMimeType: 'application/json',
       });
-
+      this.checkAborted(runId, run);
       run.tokenSummary.orchestrator = this.combineUsage(run.tokenSummary.orchestrator, memExtractResult.usage);
 
       let extractedMemories: Array<{
@@ -521,13 +577,13 @@ Output valid JSON in the following schema:
       }
 
       // Commit memories to Mem0 MCP via Orchestrator
-      const commitResult = mem0Store.addMemories(extractedMemories, 'orchestrator', runId);
+      const commitResult = await mem0Store.addMemories(extractedMemories, 'orchestrator', runId);
       run.mem0Writes = commitResult.addedMemories;
 
       this.addStepEvent(
         run,
         'mem0_mcp',
-        'add_memories',
+        'add_memory_tool',
         'completed',
         commitResult.message,
         { committedMemories: commitResult.addedMemories },
@@ -537,12 +593,14 @@ Output valid JSON in the following schema:
       // ----------------------------------------------------
       // STEP 9: Autonomous Skill Pattern-Check & Evolution (Step 7.5)
       // ----------------------------------------------------
+      this.checkAborted(runId, run);
       this.addStepEvent(run, 'orchestrator', 'Skill Pattern-Check (Step 7.5)', 'running', 'Orchestrator retrieving accumulated memories and evaluating SKILL.md creation for workers...');
 
       const workers: AgentType[] = ['research', 'analysis', 'synthesis'];
-      const allAccumulated = mem0Store.listMemories();
+      const allAccumulated = await mem0Store.listMemories();
 
       for (const worker of workers) {
+        this.checkAborted(runId, run);
         const snippet = worker === 'research'
           ? run.researchBrief || ''
           : worker === 'analysis'
@@ -610,17 +668,57 @@ Output valid JSON in the following schema:
       run.endTime = new Date().toISOString();
       this.runHistory.unshift(run);
       this.activeRuns.delete(runId);
+      this.cancelledRuns.delete(runId);
 
       return run;
     } catch (err: any) {
-      console.error('Research Run Failed:', err);
-      run.status = 'error';
-      run.error = err.message || String(err);
+      const isCancelled = err.message === 'ORCHESTRATION_CANCELLED_BY_USER' || this.cancelledRuns.has(runId);
+
+      // Calculate whatever tokens were collected
+      const totalPrompt =
+        run.tokenSummary.orchestrator.promptTokens +
+        run.tokenSummary.research.promptTokens +
+        run.tokenSummary.analysis.promptTokens +
+        run.tokenSummary.synthesis.promptTokens +
+        run.tokenSummary.callbacks.promptTokens;
+
+      const totalCandidate =
+        run.tokenSummary.orchestrator.candidateTokens +
+        run.tokenSummary.research.candidateTokens +
+        run.tokenSummary.analysis.candidateTokens +
+        run.tokenSummary.synthesis.candidateTokens +
+        run.tokenSummary.callbacks.candidateTokens;
+
+      run.tokenSummary.total = {
+        promptTokens: totalPrompt,
+        candidateTokens: totalCandidate,
+        totalTokens: totalPrompt + totalCandidate,
+        estimatedCostUsd: calculateCost(totalPrompt, totalCandidate),
+      };
+
       run.endTime = new Date().toISOString();
 
-      this.addStepEvent(run, 'system', 'Execution Error', 'failed', run.error);
+      if (isCancelled) {
+        run.status = 'cancelled';
+        run.error = 'Orchestration stopped by user.';
+        // Mark any running steps as failed
+        run.steps.forEach(st => {
+          if (st.status === 'running') {
+            st.status = 'failed';
+            st.details = (st.details ? st.details + ' - ' : '') + 'Stopped by user request.';
+          }
+        });
+        this.addStepEvent(run, 'system', 'Pipeline Terminated', 'failed', 'Orchestration manually stopped by user.');
+      } else {
+        console.error('Research Run Failed:', err);
+        run.status = 'error';
+        run.error = err.message || String(err);
+        this.addStepEvent(run, 'system', 'Execution Error', 'failed', run.error);
+      }
+
       this.runHistory.unshift(run);
       this.activeRuns.delete(runId);
+      this.cancelledRuns.delete(runId);
       return run;
     }
   }

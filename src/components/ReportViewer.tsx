@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Download, Copy, Check, FileText, Search, Network, Sparkles, Database } from 'lucide-react';
+import { Download, Copy, Check, FileText, Search, Network, Sparkles, Database, AlertCircle } from 'lucide-react';
 import { ResearchRun } from '../types';
 
 interface ReportViewerProps {
@@ -28,7 +28,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ run }) => {
   };
 
   const handleDownload = () => {
-    const content = run.synthesisReport || 'No report generated.';
+    const content = run.synthesisReport || run.analysisReport || run.researchBrief || 'No report generated.';
     const blob = new Blob([content], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -58,6 +58,11 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ run }) => {
           <span className="text-xs text-slate-400 font-mono">
             {run.id} · {run.tokenSummary.total.totalTokens} tokens
           </span>
+          {run.status === 'cancelled' && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+              STOPPED
+            </span>
+          )}
         </div>
 
         {/* View mode buttons */}
@@ -133,6 +138,17 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({ run }) => {
 
       {/* Content Body */}
       <div className="p-6 overflow-y-auto flex-1 bg-white">
+        {run.status === 'cancelled' && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start space-x-3">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-amber-950">Orchestration Stopped by User</p>
+              <p className="text-amber-800">
+                The agent pipeline execution was stopped at will. All intermediate agent outputs, research briefs, analysis artifacts, and token metrics recorded before cancellation remain fully accessible via the tabs above.
+              </p>
+            </div>
+          </div>
+        )}
         {activeReportTab === 'synthesis' && (
           <div>
             {run.synthesisReport ? (

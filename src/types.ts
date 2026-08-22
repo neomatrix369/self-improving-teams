@@ -73,7 +73,7 @@ export interface ResearchRun {
   id: string;
   topic: string;
   userQuery: string;
-  status: 'idle' | 'running' | 'completed' | 'error';
+  status: 'idle' | 'running' | 'completed' | 'error' | 'cancelled';
   startTime: string;
   endTime?: string;
   divergenceDecision?: DivergenceDecision;
@@ -96,3 +96,23 @@ export interface AgentSkill {
   content: string;
   triggerHistory: string[];
 }
+
+export interface Mem0ToolInfo {
+  name: string;
+  description: string;
+}
+
+export interface Mem0Config {
+  mode: 'mock' | 'real';
+  transport: string;
+  mcpUrl: string;
+  authToken?: string;
+  userId?: string;
+  connected: boolean;
+  latencyMs?: number;
+  toolsDiscovered: number;
+  tools: Mem0ToolInfo[];
+  statusMessage?: string;
+  lastChecked?: string;
+}
+

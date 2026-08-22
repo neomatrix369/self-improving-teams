@@ -10,8 +10,11 @@ export async function runCliCommand(args: string[]): Promise<string> {
 🤖 ADK Self-Improving Research Team CLI
 Usage:
   research --topic "<topic>" [--callback]   Run complete multi-agent research workflow
+  stop                                      Stop active running research orchestration
   memory list                               List all stored Mem0 memories
   memory search "<query>"                   Search Mem0 long-term memory
+  memory status                             Show Mem0 MCP transport, mode, and health
+  memory mode [mock|real]                   Toggle between Mocked and Real MCP mode
   memory reset                              Clear all Mem0 memories to zero state
   skills list                               View active SKILL.md status for all agents
   skills reset                              Reset all SKILL.md files to cold start
@@ -22,8 +25,18 @@ Usage:
 
   if (command === 'memory') {
     const sub = args[1];
+    if (sub === 'status' || sub === 'config') {
+      const cfg = mem0Store.getConfig();
+      return `=== Mem0 Configuration & Health ===\nMode: ${cfg.mode.toUpperCase()}\nTransport: ${cfg.transport}\nEndpoint: ${cfg.mcpUrl}\nStatus: ${cfg.connected ? 'CONNECTED (Online)' : 'DISCONNECTED'}\nLatency: ${cfg.latencyMs}ms\nDiscovered Tools (${cfg.toolsDiscovered}):\n${cfg.tools.map(t => `  - ${t.name.padEnd(26)} : ${t.description}`).join('\n')}`;
+    }
+    if (sub === 'mode') {
+      const targetMode = args[2] === 'real' ? 'real' : 'mock';
+      await mem0Store.setConfig({ mode: targetMode });
+      const updated = mem0Store.getConfig();
+      return `Mem0 mode switched to: ${updated.mode.toUpperCase()}.\nEndpoint: ${updated.mcpUrl}\nStatus: ${updated.connected ? 'CONNECTED' : 'DISCONNECTED'} (${updated.statusMessage})`;
+    }
     if (sub === 'list') {
-      const mems = mem0Store.listMemories();
+      const mems = await mem0Store.listMemories();
       if (mems.length === 0) return 'Mem0 MCP: No memories stored (Cold Start).';
       return mems
         .map(
@@ -36,14 +49,14 @@ Usage:
     }
     if (sub === 'search') {
       const q = args.slice(2).join(' ').replace(/^["']|["']$/g, '');
-      const results = mem0Store.searchMemory(q);
+      const results = await mem0Store.searchMemory(q);
       if (results.length === 0) return `Mem0 MCP: No memories found matching "${q}".`;
       return results
         .map((m, i) => `[${i + 1}] (Score: ${m.relevanceScore || 1}) [${m.category}] ${m.text}`)
         .join('\n');
     }
     if (sub === 'reset') {
-      mem0Store.resetMemories();
+      await mem0Store.resetMemories();
       return 'Mem0 MCP: All long-term memories successfully wiped to cold-start zero state.';
     }
   }
@@ -65,6 +78,12 @@ Usage:
       skillManager.resetSkills();
       return 'AutoSkill: All agent SKILL.md files successfully reset to cold-start zero state.';
     }
+  }
+
+  if (command === 'stop' || command === 'abort' || command === 'kill') {
+    const runId = args[1];
+    const res = agentOrchestrator.stopResearch(runId);
+    return res.message;
   }
 
   if (command === 'history') {

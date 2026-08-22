@@ -1,7 +1,7 @@
 import React from 'react';
 import { CliConsole } from './CliConsole';
 import { ResearchRun } from '../types';
-import { Bot, Database, Sparkles, Activity, Layers } from 'lucide-react';
+import { Bot, Database, Sparkles, Activity, Layers, Square } from 'lucide-react';
 
 interface TerminalFirstLayoutProps {
   currentRun: ResearchRun | null;
@@ -9,6 +9,8 @@ interface TerminalFirstLayoutProps {
   mem0Count: number;
   skillsCount: number;
   onRefresh: () => void;
+  onStopResearch?: () => void;
+  isStopping?: boolean;
 }
 
 export const TerminalFirstLayout: React.FC<TerminalFirstLayoutProps> = ({
@@ -17,6 +19,8 @@ export const TerminalFirstLayout: React.FC<TerminalFirstLayoutProps> = ({
   mem0Count,
   skillsCount,
   onRefresh,
+  onStopResearch,
+  isStopping,
 }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -34,9 +38,23 @@ export const TerminalFirstLayout: React.FC<TerminalFirstLayoutProps> = ({
               <Activity className="w-3.5 h-3.5 mr-1" />
               ADK SYSTEM TELEMETRY
             </span>
-            <span className={isRunning ? 'text-amber-400 animate-pulse' : 'text-emerald-400'}>
-              {isRunning ? '● RUNNING' : '● IDLE'}
-            </span>
+            <div className="flex items-center space-x-2">
+              {isRunning && onStopResearch && (
+                <button
+                  id="btn-terminal-stop"
+                  onClick={onStopResearch}
+                  disabled={isStopping}
+                  className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-sans text-[11px] flex items-center space-x-1 transition-all active:scale-95 disabled:opacity-50"
+                  title="Stop agent orchestration at will"
+                >
+                  <Square className="w-2.5 h-2.5 fill-current" />
+                  <span>{isStopping ? 'Stopping...' : 'STOP'}</span>
+                </button>
+              )}
+              <span className={isRunning ? 'text-amber-400 animate-pulse' : 'text-emerald-400'}>
+                {isRunning ? '● RUNNING' : '● IDLE'}
+              </span>
+            </div>
           </div>
 
           <div className="space-y-1 text-slate-300">
