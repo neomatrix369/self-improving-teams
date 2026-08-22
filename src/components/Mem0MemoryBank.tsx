@@ -70,7 +70,7 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
   const [newText, setNewText] = useState('');
   const [newCategory, setNewCategory] = useState<'preference' | 'finding' | 'insight' | 'graph_relation'>('preference');
   const [newTags, setNewTags] = useState('privacy, local-ai');
-  const [newSource, setNewSource] = useState('Hermes');
+  const [newSource, setNewSource] = useState('Hermes-like agent');
   const [newRel, setNewRel] = useState('uses');
   const [newTarget, setNewTarget] = useState('Qwen 2.5');
 

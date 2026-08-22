@@ -73,7 +73,7 @@ Identify useful relationships such as:
 Example:
 
 ```text
-Hermes -> uses -> Qwen
+Hermes-like agent -> uses -> Qwen
 Qwen -> enables -> local inference
 local inference -> supports -> privacy
 ```

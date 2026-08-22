@@ -52,8 +52,8 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
       badge: 'Cold Start Demo 1',
     },
     {
-      title: 'Hermes vs Local Serving',
-      query: 'Evaluate Hermes Agent Framework performance when paired with Qwen 2.5 local inference',
+      title: 'Hermes-like agent vs Local Serving',
+      query: 'Evaluate Hermes-like agent Framework performance when paired with Qwen 2.5 local inference',
       badge: 'Warm Memory Demo 2',
     },
     {
