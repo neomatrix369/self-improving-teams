@@ -19,11 +19,8 @@ const KNOWN_MEM0_TOOLS: Mem0ToolInfo[] = [
 
 class Mem0McpStore {
   private memories: Mem0Memory[] = [];
-  private mode: 'mock' | 'real' = (process.env.MEM0_MODE === 'real' ? 'real' : 'mock');
-  private transport: string = process.env.MEM0_MCP_TRANSPORT || 'HTTP';
+  private mode: 'mock' | 'real' = 'mock';
   private mcpUrl: string = process.env.MEM0_MCP_URL || 'http://localhost:8888/mcp/mcp';
-  private authToken: string = process.env.MEM0_MCP_AUTH_TOKEN || '';
-  private userId: string = process.env.MEM0_USER_ID || 'research_team';
   
   private isConnected: boolean = false;
   private latencyMs: number = 0;
@@ -33,12 +30,6 @@ class Mem0McpStore {
   constructor() {
     this.ensureDataDir();
     this.loadFromDisk();
-    // Test connection initially if in real mode
-    if (this.mode === 'real') {
-      this.testConnection().catch(err => {
-        console.warn('[Mem0 MCP] Initial connection test in real mode:', err.message);
-      });
-    }
   }
 
   // -------------------------------------------------------------
@@ -47,12 +38,10 @@ class Mem0McpStore {
   public getConfig(): Mem0Config {
     return {
       mode: this.mode,
-      transport: this.transport,
+      transport: 'HTTP',
       mcpUrl: this.mcpUrl,
-      authToken: this.authToken ? '••••••••' : '',
-      userId: this.userId,
       connected: this.mode === 'mock' ? true : this.isConnected,
-      latencyMs: this.mode === 'mock' ? 2 : this.latencyMs,
+      latencyMs: this.mode === 'mock' ? 418 : this.latencyMs,
       toolsDiscovered: KNOWN_MEM0_TOOLS.length,
       tools: KNOWN_MEM0_TOOLS,
       statusMessage: this.statusMessage,
@@ -67,17 +56,6 @@ class Mem0McpStore {
     if (newConfig.mcpUrl) {
       this.mcpUrl = newConfig.mcpUrl.trim();
     }
-    if (newConfig.transport) {
-      this.transport = newConfig.transport;
-    }
-    if (newConfig.authToken !== undefined) {
-      if (newConfig.authToken && !newConfig.authToken.includes('•••')) {
-        this.authToken = newConfig.authToken.trim();
-      }
-    }
-    if (newConfig.userId) {
-      this.userId = newConfig.userId.trim();
-    }
 
     if (this.mode === 'real') {
       await this.testConnection();
@@ -89,7 +67,7 @@ class Mem0McpStore {
   }
 
   // -------------------------------------------------------------
-  // Real MCP JSON-RPC 2.0 Transport
+  // Real MCP JSON-RPC 2.0 Transport (Auth: none)
   // -------------------------------------------------------------
   public async testConnection(urlOverride?: string): Promise<{
     connected: boolean;
@@ -102,7 +80,6 @@ class Mem0McpStore {
     const startTime = Date.now();
 
     try {
-      // First attempt: MCP initialize handshake or tools/list
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
@@ -110,9 +87,6 @@ class Mem0McpStore {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       };
-      if (this.authToken) {
-        headers['Authorization'] = `Bearer ${this.authToken}`;
-      }
 
       // Send JSON-RPC tools/list
       const rpcPayload = {
@@ -167,7 +141,7 @@ class Mem0McpStore {
         latencyMs: latency,
         toolsDiscovered: KNOWN_MEM0_TOOLS.length,
         tools: KNOWN_MEM0_TOOLS,
-        message: `Could not reach ${targetUrl} (${errMsg}). Ensure local MCP server is running.`,
+        message: `Could not reach ${targetUrl} (${errMsg}). Ensure local MCP server is running on local machine.`,
       };
     }
   }
@@ -177,9 +151,6 @@ class Mem0McpStore {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-    if (this.authToken) {
-      headers['Authorization'] = `Bearer ${this.authToken}`;
-    }
 
     const payload = {
       jsonrpc: '2.0',
@@ -278,7 +249,6 @@ class Mem0McpStore {
       try {
         const res = await this.callMcpTool('search_memories_tool', {
           query: query || '',
-          user_id: this.userId,
           limit,
         });
 
@@ -349,14 +319,11 @@ class Mem0McpStore {
   public async listMemories(filter?: { category?: string; agentSource?: string }): Promise<Mem0Memory[]> {
     if (this.mode === 'real') {
       try {
-        const res = await this.callMcpTool('get_all_memories_tool', {
-          user_id: this.userId,
-        });
+        const res = await this.callMcpTool('get_all_memories_tool', {});
 
         const rawList = Array.isArray(res) ? res : (res?.memories || res?.results || []);
         if (Array.isArray(rawList)) {
           const normalized = rawList.map((item: any, idx: number) => this.normalizeMemory(item, idx));
-          // Update cache
           this.memories = normalized;
           let result = [...normalized];
           if (filter?.category) {
@@ -391,7 +358,6 @@ class Mem0McpStore {
 
   /**
    * add_memory_tool implementation
-   * Strictly enforces that only the Orchestrator (or system/user) has write permission per SOUL guidelines.
    */
   public async addMemories(
     memoriesToAdd: Array<{
@@ -427,7 +393,6 @@ class Mem0McpStore {
         try {
           await this.callMcpTool('add_memory_tool', {
             messages: [{ role: 'user', content: item.text.trim() }],
-            user_id: this.userId,
             metadata: {
               category: newMem.category,
               tags: newMem.tags,
@@ -557,7 +522,7 @@ class Mem0McpStore {
         await this.callMcpTool('reset_memories_tool', {});
       } catch (err: any) {
         try {
-          await this.callMcpTool('delete_all_memories_tool', { user_id: this.userId });
+          await this.callMcpTool('delete_all_memories_tool', {});
         } catch (e: any) {
           console.warn('[Mem0 reset_memories_tool error]', e.message);
         }

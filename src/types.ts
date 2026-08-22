@@ -106,8 +106,6 @@ export interface Mem0Config {
   mode: 'mock' | 'real';
   transport: string;
   mcpUrl: string;
-  authToken?: string;
-  userId?: string;
   connected: boolean;
   latencyMs?: number;
   toolsDiscovered: number;

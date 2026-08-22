@@ -18,13 +18,23 @@ async function startServer() {
   // ==========================================
   // API Routes FIRST
   // ==========================================
-  app.get('/api/health', (req, res) => {
-    res.json({
-      status: 'ok',
-      hasApiKey: !!process.env.GEMINI_API_KEY,
-      mem0Count: mem0Store.listMemories().length,
-      skillsCount: skillManager.getAllSkills().filter(s => !!s.content).length,
-    });
+  app.get('/api/health', async (req, res) => {
+    try {
+      const mems = await mem0Store.listMemories();
+      res.json({
+        status: 'ok',
+        hasApiKey: !!process.env.GEMINI_API_KEY,
+        mem0Count: mems.length,
+        skillsCount: skillManager.getAllSkills().filter(s => !!s.content).length,
+      });
+    } catch {
+      res.json({
+        status: 'ok',
+        hasApiKey: !!process.env.GEMINI_API_KEY,
+        mem0Count: mem0Store.listMemoriesCached().length,
+        skillsCount: skillManager.getAllSkills().filter(s => !!s.content).length,
+      });
+    }
   });
 
   // Start research run
@@ -151,7 +161,7 @@ async function startServer() {
   app.post('/api/skills/check', async (req, res) => {
     try {
       const { agent, topic, outputSnippet } = req.body;
-      const mems = mem0Store.listMemories();
+      const mems = await mem0Store.listMemories();
       const result = await skillManager.patternCheckAndGenerate(agent || 'research', mems, {
         topic: topic || 'Manual Pattern Check',
         outputSnippet: outputSnippet || '',

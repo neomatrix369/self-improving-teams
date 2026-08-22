@@ -61,10 +61,8 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
     statusMessage: 'Ready',
   });
 
-  // Config edit state
+  // Config edit state - only MEM0_MCP_URL from .env
   const [editMcpUrl, setEditMcpUrl] = useState('http://localhost:8888/mcp/mcp');
-  const [editAuthToken, setEditAuthToken] = useState('');
-  const [editUserId, setEditUserId] = useState('research_team');
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -83,7 +81,6 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
         const data: Mem0Config = await res.json();
         setConfig(data);
         setEditMcpUrl(data.mcpUrl || 'http://localhost:8888/mcp/mcp');
-        setEditUserId(data.userId || 'research_team');
       }
     } catch (e) {
       console.error('Failed to load Mem0 config', e);
@@ -167,8 +164,6 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mcpUrl: editMcpUrl,
-          authToken: editAuthToken,
-          userId: editUserId,
         }),
       });
       if (res.ok) {
@@ -272,7 +267,7 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
               </div>
               <p className="text-xs text-slate-500">
                 {config.mode === 'real'
-                  ? 'Connected to local MCP HTTP endpoint with live schema and tool execution'
+                  ? `Connected to local machine MCP endpoint (${config.mcpUrl})`
                   : 'Operating with in-memory & local disk persistence for zero-dependency testing'}
               </p>
             </div>
@@ -310,7 +305,7 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
               id="btn-mem0-config"
               onClick={() => setShowConfigModal(true)}
               className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
-              title="MCP Server Configuration"
+              title="MCP Server Endpoint Settings"
             >
               <Settings2 className="w-4 h-4" />
             </button>
@@ -332,7 +327,7 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
                   config.connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
                 }`} />
                 <span>Transport:</span>
-                <span className="font-mono font-bold">{config.transport} → {config.mcpUrl}</span>
+                <span className="font-mono font-bold">HTTP → {config.mcpUrl}</span>
               </span>
               <span className="text-slate-500">Auth: none</span>
               <span className="flex items-center space-x-1 text-emerald-700 font-semibold">
@@ -647,11 +642,11 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
       {/* MCP Configuration Modal */}
       {showConfigModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Server className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-sm font-semibold text-slate-900">Mem0 MCP Connection Settings</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Mem0 MCP Endpoint</h3>
               </div>
               <button
                 onClick={() => setShowConfigModal(false)}
@@ -664,7 +659,7 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
             <form onSubmit={handleSaveConfig} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Local MCP Server URL (from .env / machine)
+                  Local MCP Server URL (from .env / MEM0_MCP_URL)
                 </label>
                 <input
                   type="text"
@@ -674,35 +669,8 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
                   className="w-full p-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:bg-white"
                 />
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Transport: HTTP → http://localhost:8888/mcp/mcp
+                  Transport: HTTP → {editMcpUrl} (Auth: none)
                 </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    User Identifier
-                  </label>
-                  <input
-                    type="text"
-                    value={editUserId}
-                    onChange={e => setEditUserId(e.target.value)}
-                    placeholder="research_team"
-                    className="w-full p-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Auth Token (Optional)
-                  </label>
-                  <input
-                    type="password"
-                    value={editAuthToken}
-                    onChange={e => setEditAuthToken(e.target.value)}
-                    placeholder="None (Auth: none)"
-                    className="w-full p-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg"
-                  />
-                </div>
               </div>
 
               {testResult && (
