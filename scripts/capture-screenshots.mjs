@@ -1,7 +1,7 @@
 /**
  * Screenshot gallery capture for Self-Improving Research Team
- * Run: node scripts/capture-screenshots.mjs
- * Requires the dev server to be running on http://localhost:3000
+ * Run: ~/.nvm/versions/node/v22.19.0/bin/node scripts/capture-screenshots.mjs
+ * Requires the dev server running on http://localhost:3000 with API keys in .env
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'fs';
@@ -12,12 +12,8 @@ const OUT_BASE = join(import.meta.dirname, '..', 'docs', 'screenshots');
 const W = 1440, H = 900;
 
 const dirs = [
-  '01-dashboard',
-  '02-research',
-  '03-mem0-memory',
-  '04-autoskill',
-  '05-token-telemetry',
-  '06-cli-console',
+  '01-dashboard', '02-research', '03-mem0-memory',
+  '04-autoskill', '05-token-telemetry', '06-cli-console',
 ];
 for (const d of dirs) mkdirSync(join(OUT_BASE, d), { recursive: true });
 
@@ -54,7 +50,7 @@ async function clickTab(label) {
   await wait(800);
 }
 
-// ── 1. Landing / Dashboard ───────────────────────────────────────
+// ── 1. Dashboard UI variants ─────────────────────────────────────
 await page.goto(BASE_URL, { waitUntil: 'networkidle2' });
 await shot('01-dashboard/01-studio-ready.png', 'Studio — ready state');
 
@@ -64,28 +60,26 @@ await shot('01-dashboard/02-minimal-form.png', 'Minimal Form view');
 await clickBtn('Preview All');
 await shot('01-dashboard/03-preview-all.png', 'Preview All panels');
 
-// restore Studio
 await clickBtn('Studio');
 
-// ── 2. Research Workflow — before launch ─────────────────────────
+// ── 2. Research Workflow ─────────────────────────────────────────
 await clickTab('Research Workflow');
 await shot('02-research/01-prompt-input.png', 'Research Workflow — prompt input ready');
 
-// Launch the research team and capture live activity
-console.log('Launching research team...');
+console.log('Launching research team (real API keys active)...');
 await clickBtn('Launch Research Team');
-await wait(3000);
+await wait(5000);
 await shot('02-research/02-research-running.png', 'Research Workflow — agents running');
-await wait(4000);
+await wait(12000);
 await shot('02-research/03-research-progress.png', 'Research Workflow — mid-run progress');
 
-// ── 3. Mem0 Memory (may populate during/after run) ───────────────
+// ── 3. Mem0 Memory (capture mid-run) ─────────────────────────────
 await clickTab('Mem0 Memory');
-await shot('03-mem0-memory/01-mem0-panel.png', 'Mem0 Memory panel');
+await shot('03-mem0-memory/01-mem0-mid-run.png', 'Mem0 Memory — mid-run state');
 
 // ── 4. AutoSkill Evolution ───────────────────────────────────────
 await clickTab('AutoSkill Evolution');
-await shot('04-autoskill/01-autoskill-panel.png', 'AutoSkill Evolution panel');
+await shot('04-autoskill/01-autoskill-mid-run.png', 'AutoSkill Evolution — mid-run');
 
 // ── 5. Token Telemetry ───────────────────────────────────────────
 await clickTab('Token Telemetry');
@@ -95,21 +89,18 @@ await shot('05-token-telemetry/01-token-telemetry.png', 'Token Telemetry — liv
 await clickTab('CLI Console');
 await shot('06-cli-console/01-cli-console.png', 'CLI Console');
 
-// Terminal view
 await clickBtn('Terminal');
 await shot('06-cli-console/02-terminal-view.png', 'Terminal view');
 
-// Back to Studio to capture final Research output
+// ── Wait for agents to finish, then capture final states ─────────
 await clickBtn('Studio');
 await clickTab('Research Workflow');
-await wait(6000); // let agents complete
-await shot('02-research/04-research-complete.png', 'Research Workflow — completed output');
+await wait(20000);
+await shot('02-research/04-research-complete.png', 'Research Workflow — completed synthesis');
 
-// Mem0 after run — likely populated
 await clickTab('Mem0 Memory');
 await shot('03-mem0-memory/02-mem0-populated.png', 'Mem0 Memory — after research run');
 
-// AutoSkill after run
 await clickTab('AutoSkill Evolution');
 await shot('04-autoskill/02-autoskill-populated.png', 'AutoSkill Evolution — after research run');
 
