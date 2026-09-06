@@ -6,20 +6,47 @@
 [![Gemini](https://img.shields.io/badge/Google_Gemini-3.7_Flash-orange.svg)](https://ai.google.dev/)
 [![Mem0](https://img.shields.io/badge/Mem0-MCP_Server-emerald.svg)](https://mem0.ai/)
 
+> **▶ [Watch the full demo on Loom](https://www.loom.com/share/e901dc95e9214794a70c9d96944764c8)** — see the ADK multi-agent pipeline, Mem0 MCP memory, AutoSkill synthesis, and token telemetry in action.
+
 An enterprise-grade, multi-agent autonomous research system orchestrated by Google Agent Development Kit (ADK) principles, powered by Google Gemini models, and backed by long-term memory via the **Mem0 Model Context Protocol (MCP)** server. The system features autonomous skill synthesis, real-time token and budget tracking, execution loop guards, and hot-reloadable agent souls.
 
 ---
 
 ## 📑 Table of Contents
-1. [Architecture Diagram](#-architecture-diagram)
-2. [Key Capabilities](#-key-capabilities)
-3. [Agent Hierarchy & Roles](#-agent-hierarchy--roles)
-4. [Setup & Quick Start](#-setup--quick-start)
-5. [Mem0 MCP Integration](#-mem0-mcp-integration)
-6. [Autonomous Skill Synthesis & Reload](#-autonomous-skill-synthesis--reload)
-7. [Repository Structure](#-repository-structure)
-8. [CLI & API Reference](#-cli--api-reference)
-9. [License](#-license)
+1. [Demo & Screenshots](#-demo--screenshots)
+2. [Architecture Diagram](#-architecture-diagram)
+3. [Key Capabilities](#-key-capabilities)
+4. [Agent Hierarchy & Roles](#-agent-hierarchy--roles)
+5. [Setup & Quick Start](#-setup--quick-start)
+6. [Mem0 MCP Integration](#-mem0-mcp-integration)
+7. [Autonomous Skill Synthesis & Reload](#-autonomous-skill-synthesis--reload)
+8. [Repository Structure](#-repository-structure)
+9. [CLI & API Reference](#-cli--api-reference)
+10. [License](#-license)
+
+---
+
+## 🎬 Demo & Screenshots
+
+### ▶ Video Demo
+
+> **[Watch the full demo on Loom](https://www.loom.com/share/e901dc95e9214794a70c9d96944764c8)**
+>
+> The demo covers the complete end-to-end flow: submitting a research topic, watching Scout → Critic → Hermes-like Evolver agents run in a loop-guarded ADK pipeline, Mem0 MCP memory being searched and written, AutoSkill synthesis producing `SKILL.md` files, and live token/cost telemetry across all panels.
+
+### Screenshots
+
+Browse the full [screenshot gallery](docs/screenshots/README.md) for all UI surfaces. Key highlights:
+
+| Surface | Preview |
+|:---|:---|
+| **Research Workflow** — prompt input with quick presets | ![Research prompt](docs/screenshots/02-research/01-prompt-input.png) |
+| **Research Workflow** — agents running | ![Agents running](docs/screenshots/02-research/02-research-running.png) |
+| **Research Workflow** — completed synthesis | ![Completed](docs/screenshots/02-research/04-research-complete.png) |
+| **Mem0 Memory Bank** — after research run | ![Mem0 populated](docs/screenshots/03-mem0-memory/02-mem0-populated.png) |
+| **AutoSkill Evolution** — synthesised skills | ![AutoSkill](docs/screenshots/04-autoskill/02-autoskill-populated.png) |
+| **Token Telemetry** — live counters | ![Token Telemetry](docs/screenshots/05-token-telemetry/01-token-telemetry.png) |
+| **CLI Console** | ![CLI Console](docs/screenshots/06-cli-console/01-cli-console.png) |
 
 ---
 
