@@ -2,7 +2,7 @@
 
 UI captures grouped by surface, taken from a live development session.
 
-**Demo walkthrough video:** [▶ Watch on Loom](https://www.loom.com/share/e901dc95e9214794a70c9d96944764c8)
+**Demo walkthrough video:** [▶ Watch on Loom](https://www.loom.com/share/e901dc95e9214794a70c9d96944764c8) — [@rxShri99](https://github.com/rxShri99) walks through the whole app start to finish.
 
 Regenerate all screenshots after UI changes:
 
