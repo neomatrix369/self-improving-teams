@@ -40,7 +40,19 @@ async function hideModeSwitcher() {
   });
 }
 
+async function dismissModeDialog() {
+  // Click "Done" button if the mode-selection modal is open, then press Escape as fallback
+  await page.evaluate(() => {
+    const done = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Done');
+    if (done) done.click();
+  });
+  await wait(400);
+  await page.keyboard.press('Escape');
+  await wait(300);
+}
+
 async function shot(filename, desc) {
+  await dismissModeDialog();
   await hideModeSwitcher();
   await wait(600);
   await page.screenshot({ path: join(OUT_BASE, filename) });
