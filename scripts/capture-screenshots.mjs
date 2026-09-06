@@ -27,8 +27,22 @@ const page = await browser.newPage();
 
 async function wait(ms = 1200) { await new Promise(r => setTimeout(r, ms)); }
 
+async function hideModeSwitcher() {
+  await page.evaluate(() => {
+    // Hide the UI mode-switcher pill (Studio/Minimal Form/Terminal/Preview All)
+    document.querySelectorAll('div').forEach(el => {
+      if (el.className && typeof el.className === 'string' &&
+          el.className.includes('bg-slate-100') && el.className.includes('p-1') &&
+          el.className.includes('rounded-lg')) {
+        el.style.visibility = 'hidden';
+      }
+    });
+  });
+}
+
 async function shot(filename, desc) {
-  await wait(1000);
+  await hideModeSwitcher();
+  await wait(600);
   await page.screenshot({ path: join(OUT_BASE, filename) });
   console.log(`✓ ${desc} → ${filename}`);
 }

@@ -32,7 +32,7 @@ An enterprise-grade, multi-agent autonomous research system orchestrated by Goog
 
 > **[Watch the full demo on Loom](https://www.loom.com/share/e901dc95e9214794a70c9d96944764c8)**
 >
-> The demo covers the complete end-to-end flow: submitting a research topic, watching Scout → Critic → Hermes-like Evolver agents run in a loop-guarded ADK pipeline, Mem0 MCP memory being searched and written, AutoSkill synthesis producing `SKILL.md` files, and live token/cost telemetry across all panels.
+> See how [@rxShri99](https://github.com/rxShri99) walks us through the whole app start to finish — from submitting a research topic, watching Scout → Critic → Hermes-like Evolver agents run in a loop-guarded ADK pipeline, Mem0 MCP memory being searched and written, AutoSkill synthesis producing `SKILL.md` files, and live token/cost telemetry across all panels.
 
 ### Screenshots
 
