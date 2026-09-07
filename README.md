@@ -176,30 +176,26 @@ MEM0_MCP_URL="http://localhost:8888/mcp"
 MEM0_API_KEY="m0-your-mem0-api-key-here"
 ```
 
-### 3a. (Optional) Start the Mem0 MCP Server
+### 3a. (Advanced / Optional) Start the Mem0 MCP Server
 
-The app runs fully in **Mock mode** without this step — memories are stored in a local JSON file and survive server restarts. Switch to Real MCP mode when you want the full Mem0 semantic-search stack with semantic similarity and persistence across machines.
+**You do not need this to run the app.** Mock mode is the default and stores all memories in `data/mem0_store.json` on disk — add, search, delete, and history all work without any external server. The Mem0 MCP server only adds cloud-backed semantic vector search and cross-machine memory persistence.
 
-You need a free **Mem0 API key** first: sign up at [mem0.ai](https://mem0.ai), then copy the key (starts with `m0-`) into your `.env` as `MEM0_API_KEY`.
+Only continue here if you specifically want those features. You will need a free **Mem0 API key** from [mem0.ai](https://mem0.ai) (starts with `m0-`) — add it to `.env` as `MEM0_API_KEY`.
 
-Choose **one** of the two options below:
+Choose **one** install path:
 
 ---
 
 #### Option A — Docker (no Python required)
 
-Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) running.
 
-**One-time: clone the mem0-mcp repo and build the image**
 ```bash
+# One-time: clone and build the image
 git clone https://github.com/mem0ai/mem0-mcp.git
-cd mem0-mcp
-docker build -t mem0-mcp-server .
-cd ..
-```
+cd mem0-mcp && docker build -t mem0-mcp-server . && cd ..
 
-**Start the server** (keep this terminal open alongside the app):
-```bash
+# Start the server (keep this terminal open)
 docker run --rm -d \
   --name mem0-mcp \
   -e MEM0_API_KEY="m0-your-mem0-api-key-here" \
@@ -208,52 +204,34 @@ docker run --rm -d \
   -e PORT="8081" \
   -p 8888:8081 \
   mem0-mcp-server
-```
 
-> This maps container port 8081 → host port 8888. Your `.env` `MEM0_MCP_URL` should be `http://localhost:8888/mcp`.
+# Verify
+curl -s http://localhost:8888/mcp   # should return a JSON-RPC response
 
-**Verify it is healthy:**
-```bash
-curl -s http://localhost:8888/mcp   # should return a JSON-RPC response or 200
-```
-
-**Stop the server when done:**
-```bash
+# Stop when done
 docker stop mem0-mcp
 ```
 
----
-
 #### Option B — pip / uv (Python 3.9+)
 
-**Install** (one-time):
 ```bash
-# Using pip
-pip install mem0-mcp-server
+# Install (one-time)
+pip install mem0-mcp-server          # or: uv pip install mem0-mcp-server
 
-# Or using uv (faster)
-uv pip install mem0-mcp-server
-```
-
-**Start the server** (keep this terminal open alongside the app):
-```bash
+# Start the server (keep this terminal open)
 export MEM0_API_KEY="m0-your-mem0-api-key-here"
 export MEM0_DEFAULT_USER_ID="self-improving-teams"
 export HOST="0.0.0.0"
 export PORT="8888"
-uvx mem0-mcp-server
-```
+uvx mem0-mcp-server                  # or: python -m mem0_mcp_server
 
-> `uvx` runs the installed package directly. If `uvx` is not available, use `python -m mem0_mcp_server` instead.
-
-**Verify it is healthy:**
-```bash
-curl -s http://localhost:8888/mcp   # should return a JSON-RPC response or 200
+# Verify
+curl -s http://localhost:8888/mcp   # should return a JSON-RPC response
 ```
 
 ---
 
-> **Both options:** once the server is up, ensure your `.env` has `MEM0_MCP_URL="http://localhost:8888/mcp"` and `MEM0_API_KEY` set. The app falls back to Mock mode automatically if the server is unreachable.
+Once the server is up, open the **Mem0 Memory Bank** tab in the UI and click **"Real MCP Server"** to switch modes. The app falls back to Mock mode automatically if the server is unreachable.
 
 ### 3b. Run in Development Mode
 ```bash
