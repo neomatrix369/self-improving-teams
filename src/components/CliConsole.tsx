@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Terminal, Send, Trash2, HelpCircle, Sparkles, Play } from 'lucide-react';
+import { runCliCommand } from '../services/cliRunner';
 
 interface CliConsoleProps {
   onWorkflowTriggered?: () => void;
@@ -42,18 +43,20 @@ Available Commands:
     setHistoryIndex(null);
 
     try {
-      const res = await fetch('/api/cli/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd }),
-      });
-      const data = await res.json();
+      // Parse shell-like args, matching the previous server-side parser exactly.
+      const matchRegex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
+      const args: string[] = [];
+      let match;
+      while ((match = matchRegex.exec(cmd)) !== null) {
+        args.push(match[1] || match[2] || match[0]);
+      }
+      const output = await runCliCommand(args);
 
       setHistory(prev => [
         ...prev,
         {
           command: cmd,
-          output: data.output || 'No output returned.',
+          output: output || 'No output returned.',
           timestamp: new Date().toLocaleTimeString(),
         },
       ]);

@@ -13,6 +13,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { AgentSkill, AgentType } from '../types';
+import { skillManager } from '../services/skillManager';
+import { mem0Store } from '../services/mem0Store';
 
 interface SkillsInspectorProps {
   onRefreshStats: () => void;
@@ -28,9 +30,7 @@ export const SkillsInspector: React.FC<SkillsInspectorProps> = ({ onRefreshStats
   const fetchSkills = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/skills');
-      const data = await res.json();
-      setSkills(data);
+      setSkills(skillManager.getAllSkills());
     } catch (e) {
       console.error('Failed to fetch skills', e);
     } finally {
@@ -45,7 +45,7 @@ export const SkillsInspector: React.FC<SkillsInspectorProps> = ({ onRefreshStats
   const handleResetSkills = async () => {
     if (!window.confirm('Reset all generated SKILL.md files back to cold-start state?')) return;
     try {
-      await fetch('/api/skills/reset', { method: 'POST' });
+      skillManager.resetSkills();
       fetchSkills();
       onRefreshStats();
       setEvalResult(null);
@@ -58,16 +58,11 @@ export const SkillsInspector: React.FC<SkillsInspectorProps> = ({ onRefreshStats
     setEvaluating(true);
     setEvalResult(null);
     try {
-      const res = await fetch('/api/skills/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agent: selectedAgent,
-          topic: 'Manual Pattern Evaluation',
-          outputSnippet: 'Recent agent output synthesis',
-        }),
+      const mems = await mem0Store.listMemories();
+      const data = await skillManager.patternCheckAndGenerate(selectedAgent, mems, {
+        topic: 'Manual Pattern Evaluation',
+        outputSnippet: 'Recent agent output synthesis',
       });
-      const data = await res.json();
       setEvalResult(data);
       fetchSkills();
       onRefreshStats();

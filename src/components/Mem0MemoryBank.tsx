@@ -25,6 +25,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { Mem0Memory, GraphRelation, Mem0Config, Mem0ToolInfo } from '../types';
+import { mem0Store } from '../services/mem0Store';
 
 interface Mem0MemoryBankProps {
   onRefreshStats: () => void;
@@ -76,12 +77,9 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch('/api/mem0/config');
-      if (res.ok) {
-        const data: Mem0Config = await res.json();
-        setConfig(data);
-        setEditMcpUrl(data.mcpUrl || 'http://localhost:8888/mcp/mcp');
-      }
+      const data = mem0Store.getConfig();
+      setConfig(data);
+      setEditMcpUrl(data.mcpUrl || 'http://localhost:8888/mcp/mcp');
     } catch (e) {
       console.error('Failed to load Mem0 config', e);
     }
@@ -90,13 +88,9 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
   const fetchMemories = async () => {
     setLoading(true);
     try {
-      const url = searchQuery.trim()
-        ? `/api/mem0/memories?q=${encodeURIComponent(searchQuery.trim())}`
-        : selectedCategory !== 'all'
-        ? `/api/mem0/memories?category=${encodeURIComponent(selectedCategory)}`
-        : '/api/mem0/memories';
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = searchQuery.trim()
+        ? await mem0Store.searchMemory(searchQuery.trim())
+        : await mem0Store.listMemories(selectedCategory !== 'all' ? { category: selectedCategory } : undefined);
       setMemories(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Failed to fetch memories', e);
@@ -115,17 +109,10 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
 
   const handleModeToggle = async (newMode: 'mock' | 'real') => {
     try {
-      const res = await fetch('/api/mem0/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: newMode }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setConfig(updated);
-        fetchMemories();
-        onRefreshStats();
-      }
+      const updated = await mem0Store.setConfig({ mode: newMode });
+      setConfig(updated);
+      fetchMemories();
+      onRefreshStats();
     } catch (e) {
       console.error('Failed to switch Mem0 mode', e);
     }
@@ -135,22 +122,11 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
     setTestingConnection(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/mem0/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: editMcpUrl }),
-      });
-      const data = await res.json();
-      setTestResult({
-        success: data.connected,
-        message: data.message,
-      });
+      const data = await mem0Store.testConnection(editMcpUrl);
+      setTestResult({ success: data.connected, message: data.message });
       fetchConfig();
     } catch (e: any) {
-      setTestResult({
-        success: false,
-        message: e.message || 'Failed to ping MCP server',
-      });
+      setTestResult({ success: false, message: e.message || 'Failed to ping MCP server' });
     } finally {
       setTestingConnection(false);
     }
@@ -159,20 +135,11 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/mem0/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mcpUrl: editMcpUrl,
-        }),
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setConfig(updated);
-        setShowConfigModal(false);
-        fetchMemories();
-        onRefreshStats();
-      }
+      const updated = await mem0Store.setConfig({ mcpUrl: editMcpUrl });
+      setConfig(updated);
+      setShowConfigModal(false);
+      fetchMemories();
+      onRefreshStats();
     } catch (e) {
       console.error('Failed to save config', e);
     }
@@ -180,7 +147,7 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`/api/mem0/memory/${id}`, { method: 'DELETE' });
+      await mem0Store.deleteMemory(id);
       fetchMemories();
       onRefreshStats();
     } catch (e) {
@@ -191,7 +158,7 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
   const handleReset = async () => {
     if (!window.confirm(`Are you sure you want to reset all Mem0 memories (${config.mode.toUpperCase()} mode) to zero state?`)) return;
     try {
-      await fetch('/api/mem0/reset', { method: 'POST' });
+      await mem0Store.resetMemories();
       fetchMemories();
       onRefreshStats();
     } catch (e) {
@@ -214,16 +181,10 @@ export const Mem0MemoryBank: React.FC<Mem0MemoryBankProps> = ({ onRefreshStats }
       .filter(Boolean);
 
     try {
-      await fetch('/api/mem0/memory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: newText.trim(),
-          category: newCategory,
-          relations,
-          tags,
-        }),
-      });
+      await mem0Store.addMemories(
+        [{ text: newText.trim(), category: newCategory, relations, tags }],
+        'user'
+      );
       setShowAddModal(false);
       setNewText('');
       fetchMemories();

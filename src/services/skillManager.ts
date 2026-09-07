@@ -1,10 +1,10 @@
-import fs from 'fs';
-import path from 'path';
-import { AgentType, AgentSkill, Mem0Memory } from '../src/types';
-import { callGeminiModel } from './geminiClient';
+import { AgentType, AgentSkill, Mem0Memory } from '../types';
+import { callGeminiModel } from './gemini';
+import { readJSON, writeJSON, removeKey } from './storage';
 
-const SKILLS_DIR = path.join(process.cwd(), 'skills');
-const SKILLS_META_FILE = path.join(SKILLS_DIR, 'skills_meta.json');
+const STORAGE_KEY_META = 'adk_skills_meta';
+const SKILL_KEY_PREFIX = 'adk_skill_';
+const AGENTS: AgentType[] = ['orchestrator', 'research', 'analysis', 'synthesis'];
 
 interface SkillMetaRecord {
   agent: AgentType;
@@ -13,68 +13,27 @@ interface SkillMetaRecord {
   triggerHistory: string[];
 }
 
-export class SkillManager {
-  constructor() {
-    this.ensureSkillsDir();
-  }
-
-  private ensureSkillsDir() {
-    if (!fs.existsSync(SKILLS_DIR)) {
-      try {
-        fs.mkdirSync(SKILLS_DIR, { recursive: true });
-      } catch (e) {
-        console.error('Failed to create skills directory', e);
-      }
-    }
-  }
-
-  private getSkillFilePath(agent: AgentType): string {
-    return path.join(SKILLS_DIR, `${agent}_skill.md`);
+class SkillManager {
+  private getSkillKey(agent: AgentType): string {
+    return SKILL_KEY_PREFIX + agent;
   }
 
   private getMetaRecords(): Record<string, SkillMetaRecord> {
-    try {
-      if (fs.existsSync(SKILLS_META_FILE)) {
-        return JSON.parse(fs.readFileSync(SKILLS_META_FILE, 'utf-8'));
-      }
-    } catch (e) {
-      console.error('Failed to read skills metadata', e);
-    }
-    return {};
+    return readJSON<Record<string, SkillMetaRecord>>(STORAGE_KEY_META, {});
   }
 
   private saveMetaRecords(records: Record<string, SkillMetaRecord>) {
-    try {
-      this.ensureSkillsDir();
-      fs.writeFileSync(SKILLS_META_FILE, JSON.stringify(records, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('Failed to save skills metadata', e);
-    }
+    writeJSON(STORAGE_KEY_META, records);
   }
 
-  /**
-   * Retrieves the current SKILL.md content for an agent if one exists
-   */
   public getSkill(agent: AgentType): string | null {
-    const filePath = this.getSkillFilePath(agent);
-    if (fs.existsSync(filePath)) {
-      try {
-        return fs.readFileSync(filePath, 'utf-8');
-      } catch (e) {
-        console.error(`Failed to read skill file for ${agent}`, e);
-      }
-    }
-    return null;
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage.getItem(this.getSkillKey(agent));
   }
 
-  /**
-   * Returns details about all registered agent skills
-   */
   public getAllSkills(): AgentSkill[] {
-    const agents: AgentType[] = ['orchestrator', 'research', 'analysis', 'synthesis'];
     const meta = this.getMetaRecords();
-
-    return agents.map(agent => {
+    return AGENTS.map(agent => {
       const content = this.getSkill(agent);
       const m = meta[agent] || {
         agent,
@@ -82,7 +41,6 @@ export class SkillManager {
         updatedAt: content ? new Date().toISOString() : '',
         triggerHistory: [],
       };
-
       return {
         agent,
         name: `${agent.charAt(0).toUpperCase() + agent.slice(1)} Autonomous Skill`,
@@ -94,17 +52,10 @@ export class SkillManager {
     });
   }
 
-  /**
-   * Evaluates accumulated memories and determines if an operational SKILL.md should be synthesized.
-   * Modeled on AutoSkill's approach: pattern extraction, distillation into actionable rules, and layering.
-   */
   public async patternCheckAndGenerate(
     agent: AgentType,
     accumulatedMemories: Mem0Memory[],
-    runContext: {
-      topic: string;
-      outputSnippet: string;
-    }
+    runContext: { topic: string; outputSnippet: string }
   ): Promise<{ created: boolean; skillSnippet: string; reason: string; version: number }> {
     if (accumulatedMemories.length === 0 && !runContext.outputSnippet) {
       return {
@@ -159,9 +110,7 @@ OUTPUT FORMAT (JSON):
       const meta = this.getMetaRecords();
 
       if (parsed.shouldUpdate && parsed.skillContent) {
-        const filePath = this.getSkillFilePath(agent);
-        this.ensureSkillsDir();
-        fs.writeFileSync(filePath, parsed.skillContent, 'utf-8');
+        localStorage.setItem(this.getSkillKey(agent), parsed.skillContent);
 
         const currentMeta = meta[agent] || {
           agent,
@@ -188,14 +137,14 @@ OUTPUT FORMAT (JSON):
           reason: parsed.reason,
           version: newVersion,
         };
-      } else {
-        return {
-          created: false,
-          skillSnippet: currentSkill || '',
-          reason: parsed.reason || 'Pattern check complete. Existing instructions are sufficient.',
-          version: meta[agent]?.version || 0,
-        };
       }
+
+      return {
+        created: false,
+        skillSnippet: currentSkill || '',
+        reason: parsed.reason || 'Pattern check complete. Existing instructions are sufficient.',
+        version: meta[agent]?.version || 0,
+      };
     } catch (e: any) {
       console.error(`Skill pattern check failed for ${agent}:`, e);
       return {
@@ -207,28 +156,11 @@ OUTPUT FORMAT (JSON):
     }
   }
 
-  /**
-   * Reset all agent SKILL.md files to cold start
-   */
   public resetSkills(): void {
-    const agents: AgentType[] = ['orchestrator', 'research', 'analysis', 'synthesis'];
-    for (const agent of agents) {
-      const filePath = this.getSkillFilePath(agent);
-      if (fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-        } catch (e) {
-          console.error(`Failed to delete skill file for ${agent}`, e);
-        }
-      }
+    for (const agent of AGENTS) {
+      removeKey(this.getSkillKey(agent));
     }
-    if (fs.existsSync(SKILLS_META_FILE)) {
-      try {
-        fs.unlinkSync(SKILLS_META_FILE);
-      } catch (e) {
-        console.error('Failed to delete skills metadata file', e);
-      }
-    }
+    removeKey(STORAGE_KEY_META);
   }
 }
 

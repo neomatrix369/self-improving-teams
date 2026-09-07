@@ -9,6 +9,11 @@ import { CliConsole } from './components/CliConsole';
 import { MinimalLayout } from './components/MinimalLayout';
 import { TerminalFirstLayout } from './components/TerminalFirstLayout';
 import { ResearchRun } from './types';
+import { agentOrchestrator } from './services/agentOrchestrator';
+import { mem0Store } from './services/mem0Store';
+import { skillManager } from './services/skillManager';
+import { hasGeminiKey, setSessionGeminiKey } from './services/gemini';
+import { KeyPromptModal } from './components/KeyPromptModal';
 
 export default function App() {
   const [layoutMode, setLayoutMode] = useState<UILayoutMode>(() => {
@@ -21,40 +26,38 @@ export default function App() {
   const [isStopping, setIsStopping] = useState(false);
   const [mem0Count, setMem0Count] = useState(0);
   const [skillsCount, setSkillsCount] = useState(0);
+  // Show the key prompt on first load unless a build-time key is baked in.
+  const [showKeyPrompt, setShowKeyPrompt] = useState(() => !hasGeminiKey());
+
+  const handleKeySubmit = async ({ geminiKey, mem0McpUrl }: { geminiKey: string; mem0McpUrl: string }) => {
+    setSessionGeminiKey(geminiKey);
+    if (mem0McpUrl) {
+      try {
+        await mem0Store.setSessionMcpUrl(mem0McpUrl);
+      } catch (e) {
+        console.error('Failed to apply Mem0 MCP URL for this session', e);
+      }
+    }
+    setShowKeyPrompt(false);
+  };
 
   const handleSetLayoutMode = (mode: UILayoutMode) => {
     setLayoutMode(mode);
     localStorage.setItem('adk_ui_layout', mode);
   };
 
-  // Fetch initial stats and history
   const fetchGlobalStats = async () => {
     try {
-      const [healthRes, historyRes, skillsRes] = await Promise.all([
-        fetch('/api/health').catch(() => null),
-        fetch('/api/research/history').catch(() => null),
-        fetch('/api/skills').catch(() => null),
-      ]);
+      const mems = await mem0Store.listMemories();
+      setMem0Count(mems.length);
 
-      if (healthRes && healthRes.ok) {
-        const hData = await healthRes.json();
-        setMem0Count(hData.mem0Count || 0);
-      }
+      const skills = skillManager.getAllSkills();
+      setSkillsCount(skills.filter(s => s.version > 0).length);
 
-      if (skillsRes && skillsRes.ok) {
-        const sData = await skillsRes.json();
-        const activeCount = Array.isArray(sData) ? sData.filter((s: any) => s.version > 0).length : 0;
-        setSkillsCount(activeCount);
-      }
-
-      if (historyRes && historyRes.ok) {
-        const histData = await historyRes.json();
-        if (Array.isArray(histData) && histData.length > 0) {
-          setRunHistory(histData);
-          if (!currentRun) {
-            setCurrentRun(histData[0]);
-          }
-        }
+      const history = agentOrchestrator.getAllRuns();
+      if (history.length > 0) {
+        setRunHistory(history);
+        setCurrentRun(prev => prev ?? history[0]);
       }
     } catch (e) {
       console.error('Failed to fetch initial stats:', e);
@@ -65,30 +68,6 @@ export default function App() {
     fetchGlobalStats();
   }, []);
 
-  // Poll active run if running
-  useEffect(() => {
-    if (!isRunning || !currentRun?.id) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/research/status/${currentRun.id}`);
-        if (res.ok) {
-          const updatedRun: ResearchRun = await res.json();
-          setCurrentRun(updatedRun);
-          if (updatedRun.status !== 'running') {
-            setIsRunning(false);
-            setIsStopping(false);
-            fetchGlobalStats();
-          }
-        }
-      } catch (e) {
-        console.error('Error polling status', e);
-      }
-    }, 1200);
-
-    return () => clearInterval(interval);
-  }, [isRunning, currentRun?.id]);
-
   const handleStartResearch = async (
     topic: string,
     options: { triggerCallbackDemo: boolean }
@@ -98,20 +77,16 @@ export default function App() {
     setActiveTab('workflow');
 
     try {
-      const res = await fetch('/api/research/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic,
-          triggerCallbackDemo: options.triggerCallbackDemo,
-        }),
+      const run = await agentOrchestrator.executeResearch(topic, {
+        triggerCallbackDemo: options.triggerCallbackDemo,
+        onProgress: updated => {
+          setCurrentRun(updated);
+          setRunHistory(prev => {
+            const withoutCurrent = prev.filter(r => r.id !== updated.id);
+            return [updated, ...withoutCurrent];
+          });
+        },
       });
-
-      if (!res.ok) {
-        throw new Error('Failed to start research');
-      }
-
-      const run: ResearchRun = await res.json();
       setCurrentRun(run);
       setRunHistory(prev => [run, ...prev.filter(r => r.id !== run.id)]);
       fetchGlobalStats();
@@ -127,23 +102,15 @@ export default function App() {
     if (!isRunning) return;
     setIsStopping(true);
     try {
-      await fetch('/api/research/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runId: currentRun?.id }),
-      });
-
+      agentOrchestrator.stopResearch(currentRun?.id);
       if (currentRun?.id) {
-        const res = await fetch(`/api/research/status/${currentRun.id}`);
-        if (res.ok) {
-          const updated: ResearchRun = await res.json();
-          setCurrentRun(updated);
-        }
+        const updated = agentOrchestrator.getRun(currentRun.id);
+        if (updated) setCurrentRun(updated);
       }
     } catch (e) {
       console.error('Failed to stop research:', e);
     } finally {
-      setIsRunning(false);
+      // The in-flight executeResearch will resolve with status="cancelled" and clear isRunning via its finally block.
       setIsStopping(false);
       fetchGlobalStats();
     }
@@ -152,10 +119,8 @@ export default function App() {
   const handleResetColdStart = async () => {
     if (!window.confirm('Wipe all Mem0 long-term memory & reset all autonomous SKILL.md files to cold-start zero state?')) return;
     try {
-      await Promise.all([
-        fetch('/api/mem0/reset', { method: 'POST' }),
-        fetch('/api/skills/reset', { method: 'POST' }),
-      ]);
+      await mem0Store.resetMemories();
+      skillManager.resetSkills();
       fetchGlobalStats();
       setCurrentRun(null);
     } catch (e) {
@@ -165,6 +130,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100/70 flex flex-col font-sans text-slate-900 antialiased selection:bg-indigo-500 selection:text-white">
+      {showKeyPrompt && <KeyPromptModal onSubmit={handleKeySubmit} />}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}

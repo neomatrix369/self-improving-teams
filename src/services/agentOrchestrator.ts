@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import {
   AgentType,
   ResearchRun,
@@ -8,23 +6,36 @@ import {
   AgentTokenUsage,
   RunTokenSummary,
   DivergenceDecision,
-  Mem0Memory,
   SkillUpdateInfo,
-} from '../src/types';
+} from '../types';
 import { mem0Store } from './mem0Store';
 import { skillManager } from './skillManager';
-import { callGeminiModel, calculateCost } from './geminiClient';
+import { callGeminiModel, calculateCost } from './gemini';
+import { getSoul } from './souls';
+import { readJSON, writeJSON } from './storage';
 
-const SOULS_DIR = path.join(process.cwd(), 'souls');
-const REPORTS_DIR = path.join(process.cwd(), 'reports');
+const STORAGE_KEY_HISTORY = 'adk_run_history';
+const MAX_HISTORY = 25;
 
-export class AgentOrchestrator {
+export type RunProgressListener = (run: ResearchRun) => void;
+
+export interface ExecuteResearchOptions {
+  triggerCallbackDemo?: boolean;
+  forcePatternCheck?: boolean;
+  onProgress?: RunProgressListener;
+}
+
+class AgentOrchestrator {
   private activeRuns: Map<string, ResearchRun> = new Map();
   private runHistory: ResearchRun[] = [];
   private cancelledRuns: Set<string> = new Set();
 
   constructor() {
-    this.ensureReportsDir();
+    this.runHistory = readJSON<ResearchRun[]>(STORAGE_KEY_HISTORY, []);
+  }
+
+  private persistHistory() {
+    writeJSON(STORAGE_KEY_HISTORY, this.runHistory.slice(0, MAX_HISTORY));
   }
 
   public stopResearch(runId?: string): { success: boolean; message: string; stoppedRunIds: string[] } {
@@ -42,7 +53,6 @@ export class AgentOrchestrator {
         }
       }
     } else {
-      // Stop all active runs
       for (const [id, run] of this.activeRuns.entries()) {
         this.cancelledRuns.add(id);
         stoppedRunIds.push(id);
@@ -54,9 +64,10 @@ export class AgentOrchestrator {
 
     return {
       success: stoppedRunIds.length > 0,
-      message: stoppedRunIds.length > 0
-        ? `Successfully sent stop signal to ${stoppedRunIds.length} active run(s).`
-        : 'No active runs were found to stop.',
+      message:
+        stoppedRunIds.length > 0
+          ? `Successfully sent stop signal to ${stoppedRunIds.length} active run(s).`
+          : 'No active runs were found to stop.',
       stoppedRunIds,
     };
   }
@@ -67,46 +78,12 @@ export class AgentOrchestrator {
     }
   }
 
-  private ensureReportsDir() {
-    if (!fs.existsSync(REPORTS_DIR)) {
-      try {
-        fs.mkdirSync(REPORTS_DIR, { recursive: true });
-      } catch (e) {
-        console.error('Failed to create reports directory', e);
-      }
-    }
-  }
-
-  /**
-   * Loads the verbatim SOUL file for an agent and layers any existing SKILL.md
-   */
   private getAgentInstruction(agent: AgentType): string {
-    const soulFileName = {
-      orchestrator: '01_Research_Orchestrator_SOUL.md',
-      research: '02_Research_Agent_SOUL.md',
-      analysis: '03_Analysis_Agent_SOUL.md',
-      synthesis: '04_Synthesis_Agent_SOUL.md',
-    }[agent];
-
-    const soulPath = path.join(SOULS_DIR, soulFileName);
-    let baseSoul = '';
-    try {
-      if (fs.existsSync(soulPath)) {
-        baseSoul = fs.readFileSync(soulPath, 'utf-8');
-      } else {
-        baseSoul = `You are the ${agent} agent.`;
-      }
-    } catch (e) {
-      console.error(`Failed to load SOUL file for ${agent}:`, e);
-      baseSoul = `You are the ${agent} agent.`;
-    }
-
-    // Layer SKILL.md on top of SOUL instructions (Skill Reload)
+    const baseSoul = getSoul(agent);
     const existingSkill = skillManager.getSkill(agent);
     if (existingSkill && existingSkill.trim().length > 0) {
       return `${baseSoul}\n\n---\n## ACTIVE LAYERED SKILL (Reloaded from ${agent.toUpperCase()}_SKILL.md)\n${existingSkill}\n---\n`;
     }
-
     return baseSoul;
   }
 
@@ -118,6 +95,12 @@ export class AgentOrchestrator {
     const active = Array.from(this.activeRuns.values());
     const combined = [...active, ...this.runHistory.filter(r => !this.activeRuns.has(r.id))];
     return combined.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  }
+
+  private notify(run: ResearchRun, listener?: RunProgressListener) {
+    if (!listener) return;
+    // Structured clone so React sees a new reference for state updates.
+    listener(structuredClone(run));
   }
 
   private addStepEvent(
@@ -144,12 +127,7 @@ export class AgentOrchestrator {
   }
 
   private createZeroUsage(): AgentTokenUsage {
-    return {
-      promptTokens: 0,
-      candidateTokens: 0,
-      totalTokens: 0,
-      estimatedCostUsd: 0,
-    };
+    return { promptTokens: 0, candidateTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
   }
 
   private combineUsage(u1: AgentTokenUsage, u2: AgentTokenUsage): AgentTokenUsage {
@@ -163,16 +141,8 @@ export class AgentOrchestrator {
     };
   }
 
-  /**
-   * Main Execution Pipeline
-   */
-  public async executeResearch(
-    topic: string,
-    options?: {
-      triggerCallbackDemo?: boolean;
-      forcePatternCheck?: boolean;
-    }
-  ): Promise<ResearchRun> {
+  public async executeResearch(topic: string, options?: ExecuteResearchOptions): Promise<ResearchRun> {
+    const listener = options?.onProgress;
     const runId = 'run_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6);
 
     const initialTokenSummary: RunTokenSummary = {
@@ -198,8 +168,8 @@ export class AgentOrchestrator {
     };
 
     this.activeRuns.set(runId, run);
+    this.notify(run, listener);
 
-    // Track loop-guard counters independently (strictly 1 per pair, and max 3 revision cycles)
     const loopGuard = {
       analysisToResearchCallbacks: 0,
       synthesisToAnalysisCallbacks: 0,
@@ -209,11 +179,10 @@ export class AgentOrchestrator {
     };
 
     try {
-      // ----------------------------------------------------
-      // STEP 1: Cold start / Retrieve relevant context from Mem0 MCP
-      // ----------------------------------------------------
+      // STEP 1: Retrieve Mem0 context
       this.checkAborted(runId, run);
       this.addStepEvent(run, 'mem0_mcp', 'search_memories_tool', 'running', `Searching long-term memory for topic: "${topic}"`);
+      this.notify(run, listener);
       const retrievedMemories = await mem0Store.searchMemory(topic, 8);
       const allGraphRelations = await mem0Store.getAllGraphRelations();
       const allMemsCount = (await mem0Store.listMemories()).length;
@@ -228,16 +197,17 @@ export class AgentOrchestrator {
           : 'Cold start: No prior memories found in Mem0 MCP.',
         { retrievedMemories, totalStored: allMemsCount }
       );
+      this.notify(run, listener);
 
-      const memoryContextText = retrievedMemories.length > 0
-        ? retrievedMemories.map(m => `- [${m.category}] ${m.text}`).join('\n')
-        : '(None - Zero prior context / cold start)';
+      const memoryContextText =
+        retrievedMemories.length > 0
+          ? retrievedMemories.map(m => `- [${m.category}] ${m.text}`).join('\n')
+          : '(None - Zero prior context / cold start)';
 
-      // ----------------------------------------------------
-      // STEP 2.5: Orchestrator Divergence Decision
-      // ----------------------------------------------------
+      // STEP 2.5: Divergence Decision
       this.checkAborted(runId, run);
       this.addStepEvent(run, 'orchestrator', 'Divergence Decision (Step 2.5)', 'running', 'Orchestrator evaluating single topic vs multi-subtopic divergence...');
+      this.notify(run, listener);
       const orchInstruction = this.getAgentInstruction('orchestrator');
 
       const divergencePrompt = `You are the Research Orchestrator.
@@ -285,12 +255,12 @@ Output valid JSON only in the following format:
         divergenceData,
         divergenceResult.usage
       );
+      this.notify(run, listener);
 
-      // ----------------------------------------------------
-      // STEP 3: Research Agent Execution
-      // ----------------------------------------------------
+      // STEP 3: Research Agent
       this.checkAborted(runId, run);
       this.addStepEvent(run, 'research', 'Investigation & Fact Discovery', 'running', 'Research Agent investigating subtopics and identifying developments...');
+      this.notify(run, listener);
       const researchInstruction = this.getAgentInstruction('research');
 
       const researchPrompt = `You are the Research Agent.
@@ -310,7 +280,6 @@ Never fabricate sources or speculate as fact.`;
       this.checkAborted(runId, run);
       run.researchBrief = researchResult.text;
       run.tokenSummary.research = this.combineUsage(run.tokenSummary.research, researchResult.usage);
-
       this.addStepEvent(
         run,
         'research',
@@ -320,13 +289,11 @@ Never fabricate sources or speculate as fact.`;
         { preview: researchResult.text.slice(0, 300) + '...' },
         researchResult.usage
       );
+      this.notify(run, listener);
 
-      // ----------------------------------------------------
-      // STEP 4: Analysis Agent & Callback Loop Check (Analysis -> Research)
-      // ----------------------------------------------------
+      // STEP 4: Analysis -> Research callback (optional)
       let researchFindingsForAnalysis = researchResult.text;
 
-      // Check if Analysis wants to trigger a callback to Research (or triggered via demo flag)
       if (options?.triggerCallbackDemo && loopGuard.analysisToResearchCallbacks < loopGuard.maxCallbacksPerPair) {
         this.checkAborted(runId, run);
         loopGuard.analysisToResearchCallbacks += 1;
@@ -339,6 +306,7 @@ Never fabricate sources or speculate as fact.`;
           'running',
           `Analysis invoked Research Agent tool (Callback Guard: ${loopGuard.analysisToResearchCallbacks}/${loopGuard.maxCallbacksPerPair}): "${callbackQuery}"`
         );
+        this.notify(run, listener);
 
         const callbackPrompt = `You are the Research Agent being called via direct AgentTool callback by the Analysis Agent.
 Follow-up Question: "${callbackQuery}"
@@ -349,7 +317,6 @@ Provide a concise, evidence-driven supplemental fact sheet with concrete details
         const callbackResult = await callGeminiModel(researchInstruction, callbackPrompt);
         this.checkAborted(runId, run);
         const callbackTokens = callbackResult.usage;
-
         run.tokenSummary.callbacks = this.combineUsage(run.tokenSummary.callbacks, callbackTokens);
 
         const callbackExec: AgentCallbackExecution = {
@@ -362,7 +329,6 @@ Provide a concise, evidence-driven supplemental fact sheet with concrete details
           timestamp: new Date().toISOString(),
         };
         run.callbacksExecuted.push(callbackExec);
-
         researchFindingsForAnalysis += `\n\n### Supplemental Callback Research:\n${callbackResult.text}`;
 
         this.addStepEvent(
@@ -374,13 +340,13 @@ Provide a concise, evidence-driven supplemental fact sheet with concrete details
           callbackExec,
           callbackTokens
         );
+        this.notify(run, listener);
       }
 
-      // ----------------------------------------------------
-      // STEP 5: Analysis Agent Execution
-      // ----------------------------------------------------
+      // STEP 5: Analysis Agent
       this.checkAborted(runId, run);
       this.addStepEvent(run, 'analysis', 'Reasoning & Knowledge Graph Connection', 'running', 'Analysis Agent synthesizing findings, changes, and knowledge graph relations...');
+      this.notify(run, listener);
       const analysisInstruction = this.getAgentInstruction('analysis');
 
       const analysisPrompt = `You are the Analysis Agent.
@@ -401,7 +367,6 @@ Produce your structured # Analysis output with ## Research Context, ## New Infor
       this.checkAborted(runId, run);
       run.analysisReport = analysisResult.text;
       run.tokenSummary.analysis = this.combineUsage(run.tokenSummary.analysis, analysisResult.usage);
-
       this.addStepEvent(
         run,
         'analysis',
@@ -411,13 +376,11 @@ Produce your structured # Analysis output with ## Research Context, ## New Infor
         { preview: analysisResult.text.slice(0, 300) + '...' },
         analysisResult.usage
       );
+      this.notify(run, listener);
 
-      // ----------------------------------------------------
-      // STEP 6: Synthesis Agent & Callback Loop Check (Synthesis -> Analysis)
-      // ----------------------------------------------------
+      // STEP 6: Synthesis -> Analysis callback (optional)
       let analysisFindingsForSynthesis = analysisResult.text;
 
-      // Optional callback check from Synthesis -> Analysis
       if (options?.triggerCallbackDemo && loopGuard.synthesisToAnalysisCallbacks < loopGuard.maxCallbacksPerPair) {
         this.checkAborted(runId, run);
         loopGuard.synthesisToAnalysisCallbacks += 1;
@@ -430,6 +393,7 @@ Produce your structured # Analysis output with ## Research Context, ## New Infor
           'running',
           `Synthesis invoked Analysis Agent tool (Callback Guard: ${loopGuard.synthesisToAnalysisCallbacks}/${loopGuard.maxCallbacksPerPair}): "${synthCallbackQuery}"`
         );
+        this.notify(run, listener);
 
         const synthCallbackPrompt = `You are the Analysis Agent called by the Synthesis Agent.
 Question: "${synthCallbackQuery}"
@@ -438,7 +402,6 @@ Clarify the specific reasoning connecting the findings so Synthesis can present 
         const synthCallbackResult = await callGeminiModel(analysisInstruction, synthCallbackPrompt);
         this.checkAborted(runId, run);
         const synthCbTokens = synthCallbackResult.usage;
-
         run.tokenSummary.callbacks = this.combineUsage(run.tokenSummary.callbacks, synthCbTokens);
 
         const cbRecord: AgentCallbackExecution = {
@@ -451,7 +414,6 @@ Clarify the specific reasoning connecting the findings so Synthesis can present 
           timestamp: new Date().toISOString(),
         };
         run.callbacksExecuted.push(cbRecord);
-
         analysisFindingsForSynthesis += `\n\n### Synthesis Clarification Handoff:\n${synthCallbackResult.text}`;
 
         this.addStepEvent(
@@ -463,13 +425,13 @@ Clarify the specific reasoning connecting the findings so Synthesis can present 
           cbRecord,
           synthCbTokens
         );
+        this.notify(run, listener);
       }
 
-      // ----------------------------------------------------
-      // STEP 7: Synthesis Agent Execution
-      // ----------------------------------------------------
+      // STEP 7: Synthesis Agent
       this.checkAborted(runId, run);
       this.addStepEvent(run, 'synthesis', 'Final Report Synthesis', 'running', 'Synthesis Agent compiling final user-facing response with historical context...');
+      this.notify(run, listener);
       const synthesisInstruction = this.getAgentInstruction('synthesis');
 
       const synthesisPrompt = `You are the Synthesis Agent.
@@ -499,7 +461,6 @@ Do not expose internal memory candidate formatting or hidden tool calls. Preserv
       this.checkAborted(runId, run);
       run.synthesisReport = synthesisResult.text;
       run.tokenSummary.synthesis = this.combineUsage(run.tokenSummary.synthesis, synthesisResult.usage);
-
       this.addStepEvent(
         run,
         'synthesis',
@@ -509,21 +470,12 @@ Do not expose internal memory candidate formatting or hidden tool calls. Preserv
         { preview: synthesisResult.text.slice(0, 300) + '...' },
         synthesisResult.usage
       );
+      this.notify(run, listener);
 
-      // Save report to disk as local artifact
-      try {
-        const sanitizedTitle = topic.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
-        const reportPath = path.join(REPORTS_DIR, `${sanitizedTitle}_${Date.now()}.md`);
-        fs.writeFileSync(reportPath, synthesisResult.text, 'utf-8');
-      } catch (e) {
-        console.error('Failed to save report markdown file:', e);
-      }
-
-      // ----------------------------------------------------
-      // STEP 8: Durable Memory Write (Orchestrator -> Mem0 MCP)
-      // ----------------------------------------------------
+      // STEP 8: Durable memory write
       this.checkAborted(runId, run);
       this.addStepEvent(run, 'orchestrator', 'Durable Memory Extraction & MCP Commit', 'running', 'Orchestrator reviewing candidate memories and writing to Mem0 MCP...');
+      this.notify(run, listener);
 
       const memExtractPrompt = `You are the Research Orchestrator.
 Review the Research Brief and Analysis Report from this run on topic "${topic}".
@@ -576,7 +528,6 @@ Output valid JSON in the following schema:
         ];
       }
 
-      // Commit memories to Mem0 MCP via Orchestrator
       const commitResult = await mem0Store.addMemories(extractedMemories, 'orchestrator', runId);
       run.mem0Writes = commitResult.addedMemories;
 
@@ -589,23 +540,24 @@ Output valid JSON in the following schema:
         { committedMemories: commitResult.addedMemories },
         memExtractResult.usage
       );
+      this.notify(run, listener);
 
-      // ----------------------------------------------------
-      // STEP 9: Autonomous Skill Pattern-Check & Evolution (Step 7.5)
-      // ----------------------------------------------------
+      // STEP 9: SKILL.md pattern-check per worker
       this.checkAborted(runId, run);
       this.addStepEvent(run, 'orchestrator', 'Skill Pattern-Check (Step 7.5)', 'running', 'Orchestrator retrieving accumulated memories and evaluating SKILL.md creation for workers...');
+      this.notify(run, listener);
 
       const workers: AgentType[] = ['research', 'analysis', 'synthesis'];
       const allAccumulated = await mem0Store.listMemories();
 
       for (const worker of workers) {
         this.checkAborted(runId, run);
-        const snippet = worker === 'research'
-          ? run.researchBrief || ''
-          : worker === 'analysis'
-          ? run.analysisReport || ''
-          : run.synthesisReport || '';
+        const snippet =
+          worker === 'research'
+            ? run.researchBrief || ''
+            : worker === 'analysis'
+            ? run.analysisReport || ''
+            : run.synthesisReport || '';
 
         const skillResult = await skillManager.patternCheckAndGenerate(worker, allAccumulated, {
           topic,
@@ -630,6 +582,7 @@ Output valid JSON in the following schema:
             `Synthesized new SKILL.md (v${skillResult.version}) for ${worker}: ${skillResult.reason}`,
             { skillContent: skillResult.skillSnippet, version: skillResult.version }
           );
+          this.notify(run, listener);
         }
       }
 
@@ -641,8 +594,9 @@ Output valid JSON in the following schema:
         `Pattern check completed across all 3 workers. Active skills ready for reload on next run.`,
         { updates: run.skillUpdates }
       );
+      this.notify(run, listener);
 
-      // Calculate total tokens and costs
+      // Totals
       const totalPrompt =
         run.tokenSummary.orchestrator.promptTokens +
         run.tokenSummary.research.promptTokens +
@@ -667,14 +621,15 @@ Output valid JSON in the following schema:
       run.status = 'completed';
       run.endTime = new Date().toISOString();
       this.runHistory.unshift(run);
+      this.persistHistory();
       this.activeRuns.delete(runId);
       this.cancelledRuns.delete(runId);
+      this.notify(run, listener);
 
       return run;
     } catch (err: any) {
       const isCancelled = err.message === 'ORCHESTRATION_CANCELLED_BY_USER' || this.cancelledRuns.has(runId);
 
-      // Calculate whatever tokens were collected
       const totalPrompt =
         run.tokenSummary.orchestrator.promptTokens +
         run.tokenSummary.research.promptTokens +
@@ -701,7 +656,6 @@ Output valid JSON in the following schema:
       if (isCancelled) {
         run.status = 'cancelled';
         run.error = 'Orchestration stopped by user.';
-        // Mark any running steps as failed
         run.steps.forEach(st => {
           if (st.status === 'running') {
             st.status = 'failed';
@@ -717,8 +671,10 @@ Output valid JSON in the following schema:
       }
 
       this.runHistory.unshift(run);
+      this.persistHistory();
       this.activeRuns.delete(runId);
       this.cancelledRuns.delete(runId);
+      this.notify(run, listener);
       return run;
     }
   }

@@ -51,9 +51,7 @@ Usage:
       const q = args.slice(2).join(' ').replace(/^["']|["']$/g, '');
       const results = await mem0Store.searchMemory(q);
       if (results.length === 0) return `Mem0 MCP: No memories found matching "${q}".`;
-      return results
-        .map((m, i) => `[${i + 1}] (Score: ${m.relevanceScore || 1}) [${m.category}] ${m.text}`)
-        .join('\n');
+      return results.map((m, i) => `[${i + 1}] (Score: ${m.relevanceScore || 1}) [${m.category}] ${m.text}`).join('\n');
     }
     if (sub === 'reset') {
       await mem0Store.resetMemories();
@@ -68,9 +66,9 @@ Usage:
       return skills
         .map(
           s =>
-            `=== ${s.name} (v${s.version}) ===\n${
-              s.content ? s.content : '(No SKILL.md yet - cold start)\n'
-            }\nTriggers:\n${s.triggerHistory.length > 0 ? s.triggerHistory.map(t => '  - ' + t).join('\n') : '  (None)'}`
+            `=== ${s.name} (v${s.version}) ===\n${s.content ? s.content : '(No SKILL.md yet - cold start)\n'}\nTriggers:\n${
+              s.triggerHistory.length > 0 ? s.triggerHistory.map(t => '  - ' + t).join('\n') : '  (None)'
+            }`
         )
         .join('\n\n');
     }
@@ -115,16 +113,12 @@ Usage:
       }
     }
 
-    if (!topic) {
-      return 'Error: Please specify a topic using `research --topic "<topic>"`';
-    }
+    if (!topic) return 'Error: Please specify a topic using `research --topic "<topic>"`';
 
     const outputLog: string[] = [];
     outputLog.push(`\n🚀 Launching ADK Research Team for topic: "${topic}"\n`);
 
-    const result = await agentOrchestrator.executeResearch(topic, {
-      triggerCallbackDemo: triggerCallback,
-    });
+    const result = await agentOrchestrator.executeResearch(topic, { triggerCallbackDemo: triggerCallback });
 
     outputLog.push(`=== 1. ORCHESTRATION & DIVERGENCE (Step 2.5) ===`);
     outputLog.push(`Divergence: ${result.divergenceDecision?.isDivergent ? 'Multi-Facet' : 'Single Deep'}`);
@@ -142,18 +136,13 @@ Usage:
     }
 
     outputLog.push(`=== 3. MEM0 MCP DURABLE WRITES (${result.mem0Writes.length}) ===`);
-    for (const mem of result.mem0Writes) {
-      outputLog.push(`+ [${mem.category}] ${mem.text}`);
-    }
+    for (const mem of result.mem0Writes) outputLog.push(`+ [${mem.category}] ${mem.text}`);
     outputLog.push('');
 
     outputLog.push(`=== 4. SKILL PATTERN-CHECK (Step 7.5) ===`);
     for (const sk of result.skillUpdates) {
-      if (sk.created) {
-        outputLog.push(`⚡ [${sk.agent.toUpperCase()}] Evolved to v${sk.version}: ${sk.reason}`);
-      } else {
-        outputLog.push(`- [${sk.agent.toUpperCase()}] No update needed: ${sk.reason}`);
-      }
+      if (sk.created) outputLog.push(`⚡ [${sk.agent.toUpperCase()}] Evolved to v${sk.version}: ${sk.reason}`);
+      else outputLog.push(`- [${sk.agent.toUpperCase()}] No update needed: ${sk.reason}`);
     }
     outputLog.push('');
 
@@ -174,12 +163,4 @@ Usage:
   }
 
   return `Unknown command: '${command}'. Type 'help' for available commands.`;
-}
-
-// Standalone execution if invoked from terminal directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
-  runCliCommand(args.length > 0 ? args : ['help']).then(output => {
-    console.log(output);
-  });
 }

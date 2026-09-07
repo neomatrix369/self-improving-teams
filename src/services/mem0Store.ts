@@ -1,9 +1,8 @@
-import fs from 'fs';
-import path from 'path';
-import { Mem0Memory, GraphRelation, Mem0Config, Mem0ToolInfo } from '../src/types';
+import { Mem0Memory, GraphRelation, Mem0Config, Mem0ToolInfo } from '../types';
+import { readJSON, writeJSON } from './storage';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const MEM0_FILE = path.join(DATA_DIR, 'mem0_store.json');
+const STORAGE_KEY_MEMORIES = 'adk_mem0_memories';
+const STORAGE_KEY_CONFIG = 'adk_mem0_config';
 
 const KNOWN_MEM0_TOOLS: Mem0ToolInfo[] = [
   { name: 'add_memory_tool', description: 'Store a conversation or memory payload in Mem0.' },
@@ -17,24 +16,43 @@ const KNOWN_MEM0_TOOLS: Mem0ToolInfo[] = [
   { name: 'reset_memories_tool', description: 'Reset all memories stored by the Mem0 instance.' },
 ];
 
-class Mem0McpStore {
+interface PersistedConfig {
+  mode: 'mock' | 'real';
+  mcpUrl: string;
+}
+
+class Mem0BrowserStore {
   private memories: Mem0Memory[] = [];
   private mode: 'mock' | 'real' = 'mock';
-  private mcpUrl: string = process.env.MEM0_MCP_URL || 'http://localhost:8888/mcp';
-  
-  private isConnected: boolean = false;
-  private latencyMs: number = 0;
-  private lastChecked: string = '';
-  private statusMessage: string = 'Initialized in mock mode';
+  private mcpUrl: string =
+    (import.meta.env.VITE_MEM0_MCP_URL as string | undefined) || 'http://localhost:8888/mcp';
+
+  private isConnected = false;
+  private latencyMs = 0;
+  private lastChecked = '';
+  private statusMessage = 'Initialized in mock mode';
 
   constructor() {
-    this.ensureDataDir();
-    this.loadFromDisk();
+    this.loadFromStorage();
   }
 
-  // -------------------------------------------------------------
-  // Config & Status Accessors
-  // -------------------------------------------------------------
+  private loadFromStorage() {
+    this.memories = readJSON<Mem0Memory[]>(STORAGE_KEY_MEMORIES, []);
+    const cfg = readJSON<PersistedConfig | null>(STORAGE_KEY_CONFIG, null);
+    if (cfg) {
+      this.mode = cfg.mode;
+      if (cfg.mcpUrl) this.mcpUrl = cfg.mcpUrl;
+    }
+  }
+
+  private saveMemoriesToStorage() {
+    writeJSON(STORAGE_KEY_MEMORIES, this.memories);
+  }
+
+  private saveConfigToStorage() {
+    writeJSON(STORAGE_KEY_CONFIG, { mode: this.mode, mcpUrl: this.mcpUrl });
+  }
+
   public getConfig(): Mem0Config {
     return {
       mode: this.mode,
@@ -50,25 +68,29 @@ class Mem0McpStore {
   }
 
   public async setConfig(newConfig: Partial<Mem0Config>): Promise<Mem0Config> {
-    if (newConfig.mode) {
-      this.mode = newConfig.mode;
-    }
-    if (newConfig.mcpUrl) {
-      this.mcpUrl = newConfig.mcpUrl.trim();
-    }
+    if (newConfig.mode) this.mode = newConfig.mode;
+    if (newConfig.mcpUrl) this.mcpUrl = newConfig.mcpUrl.trim();
+    this.saveConfigToStorage();
 
     if (this.mode === 'real') {
       await this.testConnection();
     } else {
-      this.statusMessage = 'Operating in Mock Mode (Local File Store)';
+      this.statusMessage = 'Operating in Mock Mode (browser localStorage)';
     }
-
     return this.getConfig();
   }
 
-  // -------------------------------------------------------------
-  // Real MCP JSON-RPC 2.0 Transport (Auth: none)
-  // -------------------------------------------------------------
+  // Session-only override: sets the MCP URL and flips to real mode without persisting
+  // anything to localStorage. Used by the startup key prompt so the URL disappears on refresh.
+  public async setSessionMcpUrl(url: string): Promise<Mem0Config> {
+    const trimmed = url.trim();
+    if (!trimmed) return this.getConfig();
+    this.mcpUrl = trimmed;
+    this.mode = 'real';
+    await this.testConnection();
+    return this.getConfig();
+  }
+
   public async testConnection(urlOverride?: string): Promise<{
     connected: boolean;
     latencyMs: number;
@@ -83,52 +105,39 @@ class Mem0McpStore {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-
-      // Send JSON-RPC tools/list
-      const rpcPayload = {
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method: 'tools/list',
-        params: {},
-      };
-
+      const rpcPayload = { jsonrpc: '2.0', id: Date.now(), method: 'tools/list', params: {} };
       const res = await fetch(targetUrl, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(rpcPayload),
         signal: controller.signal,
       });
-
       clearTimeout(timeoutId);
+
       const latency = Date.now() - startTime;
       this.latencyMs = latency;
       this.lastChecked = new Date().toISOString();
 
       if (res.ok) {
         this.isConnected = true;
-        this.statusMessage = `Connected to local Mem0 MCP server (${latency}ms)`;
+        this.statusMessage = `Connected to Mem0 MCP server (${latency}ms)`;
         return {
           connected: true,
           latencyMs: latency,
           toolsDiscovered: KNOWN_MEM0_TOOLS.length,
           tools: KNOWN_MEM0_TOOLS,
-          message: `Connected successfully (${latency}ms) to ${targetUrl}`,
-        };
-      } else {
-        this.isConnected = false;
-        this.statusMessage = `MCP server returned HTTP ${res.status}: ${res.statusText}`;
-        return {
-          connected: false,
-          latencyMs: latency,
-          toolsDiscovered: KNOWN_MEM0_TOOLS.length,
-          tools: KNOWN_MEM0_TOOLS,
-          message: `Failed to connect: HTTP ${res.status} ${res.statusText}`,
+          message: `Connected (${latency}ms) to ${targetUrl}`,
         };
       }
+      this.isConnected = false;
+      this.statusMessage = `MCP server returned HTTP ${res.status}: ${res.statusText}`;
+      return {
+        connected: false,
+        latencyMs: latency,
+        toolsDiscovered: KNOWN_MEM0_TOOLS.length,
+        tools: KNOWN_MEM0_TOOLS,
+        message: `Failed: HTTP ${res.status} ${res.statusText}`,
+      };
     } catch (err: any) {
       const latency = Date.now() - startTime;
       this.latencyMs = latency;
@@ -141,49 +150,35 @@ class Mem0McpStore {
         latencyMs: latency,
         toolsDiscovered: KNOWN_MEM0_TOOLS.length,
         tools: KNOWN_MEM0_TOOLS,
-        message: `Could not reach ${targetUrl} (${errMsg}). Ensure local MCP server is running on local machine.`,
+        message: `Could not reach ${targetUrl} (${errMsg}). Note: browser CORS may block direct calls to your MCP server.`,
       };
     }
   }
 
   private async callMcpTool(toolName: string, args: Record<string, any>): Promise<any> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-
     const payload = {
       jsonrpc: '2.0',
       id: Date.now(),
       method: 'tools/call',
-      params: {
-        name: toolName,
-        arguments: args,
-      },
+      params: { name: toolName, arguments: args },
     };
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 7000);
-
     try {
       const res = await fetch(this.mcpUrl, {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
 
-      if (!res.ok) {
-        throw new Error(`MCP tool '${toolName}' failed with HTTP ${res.status} ${res.statusText}`);
-      }
+      if (!res.ok) throw new Error(`MCP '${toolName}' failed HTTP ${res.status} ${res.statusText}`);
 
       const json = await res.json();
-      if (json.error) {
-        throw new Error(`MCP Error [${json.error.code || 'rpc'}]: ${json.error.message || JSON.stringify(json.error)}`);
-      }
+      if (json.error) throw new Error(`MCP Error [${json.error.code || 'rpc'}]: ${json.error.message || JSON.stringify(json.error)}`);
 
-      // Standard MCP result returns { content: [{ type: "text", text: "..." }] }
       if (json.result?.content && Array.isArray(json.result.content)) {
         const textContent = json.result.content.find((c: any) => c.type === 'text')?.text;
         if (textContent) {
@@ -194,7 +189,6 @@ class Mem0McpStore {
           }
         }
       }
-
       return json.result ?? json;
     } catch (err: any) {
       clearTimeout(timeoutId);
@@ -203,103 +197,38 @@ class Mem0McpStore {
     }
   }
 
-  // -------------------------------------------------------------
-  // Mock Local Persistence Helpers
-  // -------------------------------------------------------------
-  private ensureDataDir() {
-    if (!fs.existsSync(DATA_DIR)) {
-      try {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      } catch (e) {
-        console.error('Failed to create data dir', e);
-      }
-    }
-  }
-
-  private loadFromDisk() {
-    try {
-      if (fs.existsSync(MEM0_FILE)) {
-        const raw = fs.readFileSync(MEM0_FILE, 'utf-8');
-        this.memories = JSON.parse(raw);
-      }
-    } catch (e) {
-      console.error('Failed to read mem0 store', e);
-      this.memories = [];
-    }
-  }
-
-  private saveToDisk() {
-    try {
-      this.ensureDataDir();
-      fs.writeFileSync(MEM0_FILE, JSON.stringify(this.memories, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('Failed to write mem0 store', e);
-    }
-  }
-
-  // -------------------------------------------------------------
-  // Core Unified API (Mock + Real)
-  // -------------------------------------------------------------
-
-  /**
-   * search_memories_tool implementation
-   */
   public async searchMemory(query: string, limit = 8): Promise<Mem0Memory[]> {
     if (this.mode === 'real') {
       try {
-        const res = await this.callMcpTool('search_memories_tool', {
-          query: query || '',
-          limit,
-        });
-
-        const rawList = Array.isArray(res) ? res : (res?.memories || res?.results || []);
-        if (Array.isArray(rawList)) {
-          return rawList.map((item: any, idx: number) => this.normalizeMemory(item, idx));
-        }
+        const res = await this.callMcpTool('search_memories_tool', { query: query || '', limit });
+        const rawList = Array.isArray(res) ? res : res?.memories || res?.results || [];
+        if (Array.isArray(rawList)) return rawList.map((item, idx) => this.normalizeMemory(item, idx));
       } catch (err: any) {
         console.warn('[Mem0 Real Search Failed, falling back to local cache]', err.message);
       }
     }
 
-    // Mock search logic
-    if (!query || query.trim() === '') {
-      return this.memories.slice(0, limit);
-    }
+    if (!query || query.trim() === '') return this.memories.slice(0, limit);
 
     const queryTokens = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-    
     const scored = this.memories.map(mem => {
       const textLower = mem.text.toLowerCase();
       let score = 0;
-
-      // Exact substring match
-      if (textLower.includes(query.toLowerCase())) {
-        score += 10;
-      }
-
-      // Keyword token matches
+      if (textLower.includes(query.toLowerCase())) score += 10;
       for (const token of queryTokens) {
-        if (textLower.includes(token)) {
-          score += 2;
-        }
-        if (mem.tags?.some(tag => tag.toLowerCase().includes(token))) {
-          score += 3;
-        }
+        if (textLower.includes(token)) score += 2;
+        if (mem.tags?.some(tag => tag.toLowerCase().includes(token))) score += 3;
       }
-
-      // Relations match
       if (mem.relations) {
         for (const rel of mem.relations) {
           if (
             rel.source.toLowerCase().includes(query.toLowerCase()) ||
             rel.target.toLowerCase().includes(query.toLowerCase()) ||
             rel.relation.toLowerCase().includes(query.toLowerCase())
-          ) {
+          )
             score += 4;
-          }
         }
       }
-
       return { mem, score };
     });
 
@@ -307,31 +236,21 @@ class Mem0McpStore {
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map(item => ({
-        ...item.mem,
-        relevanceScore: item.score,
-      }));
+      .map(item => ({ ...item.mem, relevanceScore: item.score }));
   }
 
-  /**
-   * get_all_memories_tool / list memories
-   */
   public async listMemories(filter?: { category?: string; agentSource?: string }): Promise<Mem0Memory[]> {
     if (this.mode === 'real') {
       try {
         const res = await this.callMcpTool('get_all_memories_tool', {});
-
-        const rawList = Array.isArray(res) ? res : (res?.memories || res?.results || []);
+        const rawList = Array.isArray(res) ? res : res?.memories || res?.results || [];
         if (Array.isArray(rawList)) {
-          const normalized = rawList.map((item: any, idx: number) => this.normalizeMemory(item, idx));
+          const normalized = rawList.map((item, idx) => this.normalizeMemory(item, idx));
           this.memories = normalized;
+          this.saveMemoriesToStorage();
           let result = [...normalized];
-          if (filter?.category) {
-            result = result.filter(m => m.category === filter.category);
-          }
-          if (filter?.agentSource) {
-            result = result.filter(m => m.agentSource === filter.agentSource);
-          }
+          if (filter?.category) result = result.filter(m => m.category === filter.category);
+          if (filter?.agentSource) result = result.filter(m => m.agentSource === filter.agentSource);
           return result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         }
       } catch (err: any) {
@@ -340,25 +259,15 @@ class Mem0McpStore {
     }
 
     let result = [...this.memories];
-    if (filter?.category) {
-      result = result.filter(m => m.category === filter.category);
-    }
-    if (filter?.agentSource) {
-      result = result.filter(m => m.agentSource === filter.agentSource);
-    }
+    if (filter?.category) result = result.filter(m => m.category === filter.category);
+    if (filter?.agentSource) result = result.filter(m => m.agentSource === filter.agentSource);
     return result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
-  /**
-   * Synchronous cached list accessor for quick stats
-   */
   public listMemoriesCached(): Mem0Memory[] {
     return [...this.memories];
   }
 
-  /**
-   * add_memory_tool implementation
-   */
   public async addMemories(
     memoriesToAdd: Array<{
       text: string;
@@ -370,7 +279,7 @@ class Mem0McpStore {
     runId?: string
   ): Promise<{ addedCount: number; addedMemories: Mem0Memory[]; message: string }> {
     if (callerAgent !== 'orchestrator' && callerAgent !== 'system' && callerAgent !== 'user') {
-      throw new Error(`Permission Denied: Only Orchestrator can call add_memories on Mem0 MCP. Agent '${callerAgent}' is restricted.`);
+      throw new Error(`Permission Denied: Only Orchestrator can call add_memories. Agent '${callerAgent}' is restricted.`);
     }
 
     const createdList: Mem0Memory[] = [];
@@ -406,7 +315,6 @@ class Mem0McpStore {
         }
       }
 
-      // Maintain local cache and mock store
       const existing = this.memories.find(m => m.text.trim().toLowerCase() === item.text.trim().toLowerCase());
       if (existing) {
         if (item.relations && item.relations.length > 0) {
@@ -422,18 +330,15 @@ class Mem0McpStore {
       }
     }
 
-    this.saveToDisk();
+    this.saveMemoriesToStorage();
 
     return {
       addedCount: createdList.length,
       addedMemories: createdList,
-      message: `Successfully stored ${createdList.length} durable memories in Mem0 (${this.mode.toUpperCase()} mode).`,
+      message: `Stored ${createdList.length} durable memories in Mem0 (${this.mode.toUpperCase()} mode, browser).`,
     };
   }
 
-  /**
-   * get_memory_tool
-   */
   public async getMemory(id: string): Promise<Mem0Memory | null> {
     if (this.mode === 'real') {
       try {
@@ -446,37 +351,26 @@ class Mem0McpStore {
     return this.memories.find(m => m.id === id) || null;
   }
 
-  /**
-   * update_memory_tool
-   */
   public async updateMemory(id: string, text: string, metadata?: any): Promise<boolean> {
     if (this.mode === 'real') {
       try {
-        await this.callMcpTool('update_memory_tool', {
-          memory_id: id,
-          text,
-          metadata,
-        });
+        await this.callMcpTool('update_memory_tool', { memory_id: id, text, metadata });
       } catch (err: any) {
         console.warn('[Mem0 update_memory_tool error]', err.message);
       }
     }
-
     const item = this.memories.find(m => m.id === id);
     if (item) {
       item.text = text;
       if (metadata?.category) item.category = metadata.category;
       if (metadata?.tags) item.tags = metadata.tags;
       if (metadata?.relations) item.relations = metadata.relations;
-      this.saveToDisk();
+      this.saveMemoriesToStorage();
       return true;
     }
     return false;
   }
 
-  /**
-   * memory_history_tool
-   */
   public async getMemoryHistory(id: string): Promise<any> {
     if (this.mode === 'real') {
       try {
@@ -489,67 +383,46 @@ class Mem0McpStore {
     return mem ? [{ timestamp: mem.timestamp, text: mem.text, event: 'created' }] : [];
   }
 
-  /**
-   * delete_memory_tool
-   */
   public async deleteMemory(id: string): Promise<boolean> {
     if (this.mode === 'real') {
       try {
-        await this.callMcpTool('delete_memory_tool', {
-          memory_id: id,
-          id,
-        });
+        await this.callMcpTool('delete_memory_tool', { memory_id: id, id });
       } catch (err: any) {
         console.warn('[Mem0 delete_memory_tool error]', err.message);
       }
     }
-
     const initialLen = this.memories.length;
     this.memories = this.memories.filter(m => m.id !== id);
     if (this.memories.length !== initialLen) {
-      this.saveToDisk();
+      this.saveMemoriesToStorage();
       return true;
     }
     return false;
   }
 
-  /**
-   * reset_memories_tool / delete_all_memories_tool
-   */
   public async resetMemories(): Promise<void> {
     if (this.mode === 'real') {
       try {
         await this.callMcpTool('reset_memories_tool', {});
-      } catch (err: any) {
+      } catch {
         try {
           await this.callMcpTool('delete_all_memories_tool', {});
         } catch (e: any) {
-          console.warn('[Mem0 reset_memories_tool error]', e.message);
+          console.warn('[Mem0 reset error]', e.message);
         }
       }
     }
-
     this.memories = [];
-    this.saveToDisk();
+    this.saveMemoriesToStorage();
   }
 
-  /**
-   * Get all extracted graph relations across memories
-   */
   public async getAllGraphRelations(): Promise<GraphRelation[]> {
     const mems = await this.listMemories();
     const relations: GraphRelation[] = [];
-    for (const mem of mems) {
-      if (mem.relations) {
-        relations.push(...mem.relations);
-      }
-    }
+    for (const mem of mems) if (mem.relations) relations.push(...mem.relations);
     return relations;
   }
 
-  // -------------------------------------------------------------
-  // Helpers
-  // -------------------------------------------------------------
   private normalizeMemory(item: any, fallbackIdx: number): Mem0Memory {
     const text = typeof item === 'string' ? item : item.text || item.memory || item.content || JSON.stringify(item);
     const id = item.id || item.memory_id || `mem_${fallbackIdx}_${Date.now().toString(36)}`;
@@ -569,4 +442,4 @@ class Mem0McpStore {
   }
 }
 
-export const mem0Store = new Mem0McpStore();
+export const mem0Store = new Mem0BrowserStore();

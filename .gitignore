@@ -10,3 +10,5 @@ coverage/
 .gemini/
 .mcp.json
 .vscode/
+
+.netlify/

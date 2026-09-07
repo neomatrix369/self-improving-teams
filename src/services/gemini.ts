@@ -2,20 +2,37 @@ import { GoogleGenAI } from '@google/genai';
 
 let aiInstance: GoogleGenAI | null = null;
 
+// Session-only key: held in memory for this tab, cleared on refresh. Never persisted.
+let sessionKey = '';
+
+// The build-time key (VITE_GEMINI_API_KEY) is only present if the operator baked one
+// into the deploy. On a normal deploy it is empty and the app prompts the user for one.
+function getApiKey(): string {
+  return sessionKey || (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) || '';
+}
+
+export function hasGeminiKey(): boolean {
+  return !!getApiKey();
+}
+
+// Store the user-supplied key for this session only. No localStorage, no cookies.
+export function setSessionGeminiKey(key: string): void {
+  sessionKey = key.trim();
+  aiInstance = null;
+}
+
+export function clearSessionGeminiKey(): void {
+  sessionKey = '';
+  aiInstance = null;
+}
+
 export function getGeminiClient(): GoogleGenAI {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = getApiKey();
     if (!apiKey) {
-      console.warn('Warning: GEMINI_API_KEY environment variable is not set. Gemini API calls will fail.');
+      console.warn('GEMINI_API_KEY not set. Gemini calls will fail. Set VITE_GEMINI_API_KEY at build time or paste a key via the UI.');
     }
-    aiInstance = new GoogleGenAI({
-      apiKey: apiKey || '',
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
+    aiInstance = new GoogleGenAI({ apiKey: apiKey || '' });
   }
   return aiInstance;
 }
@@ -30,7 +47,6 @@ export interface ModelCallResult {
   };
 }
 
-// Cost calculation approximate for gemini-3.7-flash ($0.075 / 1M prompt, $0.30 / 1M output)
 export function calculateCost(promptTokens: number, candidateTokens: number): number {
   const promptCost = (promptTokens / 1_000_000) * 0.075;
   const candidateCost = (candidateTokens / 1_000_000) * 0.30;
@@ -64,17 +80,12 @@ export async function callGeminiModel(
     const metadata = response.usageMetadata;
     const promptTokens = metadata?.promptTokenCount || Math.ceil((systemInstruction.length + userPrompt.length) / 4);
     const candidateTokens = metadata?.candidatesTokenCount || Math.ceil(text.length / 4);
-    const totalTokens = metadata?.totalTokenCount || (promptTokens + candidateTokens);
+    const totalTokens = metadata?.totalTokenCount || promptTokens + candidateTokens;
     const estimatedCostUsd = calculateCost(promptTokens, candidateTokens);
 
     return {
       text,
-      usage: {
-        promptTokens,
-        candidateTokens,
-        totalTokens,
-        estimatedCostUsd,
-      },
+      usage: { promptTokens, candidateTokens, totalTokens, estimatedCostUsd },
     };
   } catch (err: any) {
     console.error('Gemini API Error:', err);
