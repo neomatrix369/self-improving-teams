@@ -14,15 +14,12 @@ An enterprise-grade, multi-agent autonomous research system orchestrated by Goog
 
 ## 📑 Table of Contents
 1. [Demo & Screenshots](#-demo--screenshots)
-2. [Architecture Diagram](#-architecture-diagram)
-3. [Key Capabilities](#-key-capabilities)
-4. [Agent Hierarchy & Roles](#-agent-hierarchy--roles)
-5. [Setup & Quick Start](#-setup--quick-start)
-6. [Mem0 MCP Integration](#-mem0-mcp-integration)
-7. [Autonomous Skill Synthesis & Reload](#-autonomous-skill-synthesis--reload)
-8. [Repository Structure](#-repository-structure)
-9. [CLI & API Reference](#-cli--api-reference)
-10. [License](#-license)
+2. [Key Capabilities](#-key-capabilities)
+3. [Setup & Quick Start](#-setup--quick-start)
+4. [Mem0 MCP Integration](#-mem0-mcp-integration)
+5. [Repository Structure](#-repository-structure)
+6. [CLI & API Reference](#-cli--api-reference)
+7. [License](#-license)
 
 ---
 
