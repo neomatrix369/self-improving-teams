@@ -14,15 +14,12 @@ An enterprise-grade, multi-agent autonomous research system orchestrated by Goog
 
 ## 📑 Table of Contents
 1. [Demo & Screenshots](#-demo--screenshots)
-2. [Architecture Diagram](#-architecture-diagram)
-3. [Key Capabilities](#-key-capabilities)
-4. [Agent Hierarchy & Roles](#-agent-hierarchy--roles)
-5. [Setup & Quick Start](#-setup--quick-start)
-6. [Mem0 MCP Integration](#-mem0-mcp-integration)
-7. [Autonomous Skill Synthesis & Reload](#-autonomous-skill-synthesis--reload)
-8. [Repository Structure](#-repository-structure)
-9. [CLI & API Reference](#-cli--api-reference)
-10. [License](#-license)
+2. [Key Capabilities](#-key-capabilities)
+3. [Setup & Quick Start](#-setup--quick-start)
+4. [Mem0 MCP Integration](#-mem0-mcp-integration)
+5. [Repository Structure](#-repository-structure)
+6. [CLI & API Reference](#-cli--api-reference)
+7. [License](#-license)
 
 ---
 
@@ -50,7 +47,8 @@ Browse the full [screenshot gallery](docs/screenshots/README.md) for all UI surf
 
 ---
 
-## 🏛 Architecture Diagram
+<details>
+<summary>🏛 Architecture Diagram</summary>
 
 ```
                              +-----------------------------------+
@@ -83,7 +81,7 @@ Browse the full [screenshot gallery](docs/screenshots/README.md) for all UI surf
 |  |                         Unified Mem0 MCP Client & Store                                 |  |
 |  |                                                                                         |  |
 |  |  Mode: [ Mocked Local Store <──────── 1-Click Toggle ────────> Real MCP Server ]       |  |
-|  |  Endpoint: process.env.MEM0_MCP_URL (http://localhost:8888/mcp/mcp)                     |  |
+|  |  Endpoint: process.env.MEM0_MCP_URL (http://localhost:8888/mcp)                        |  |
 |  |  Transport: HTTP JSON-RPC 2.0 (Auth: none)                                              |  |
 |  +-----------------------------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------------------------+
@@ -113,6 +111,8 @@ graph TD
     StoreMem0 --> FinalReport[Durable Markdown Synthesis Report]
 ```
 
+</details>
+
 ---
 
 ## ⚡ Key Capabilities
@@ -128,7 +128,8 @@ graph TD
 
 ---
 
-## 🤖 Agent Hierarchy & Roles
+<details>
+<summary>🤖 Agent Hierarchy & Roles</summary>
 
 | Agent | Model | Primary Responsibility |
 | :--- | :--- | :--- |
@@ -137,43 +138,169 @@ graph TD
 | **Critic** | Gemini 3.7 Flash | Verifies claims, conducts hallucination audits, calculates confidence scores |
 | **Hermes-like agent** | Gemini 3.7 Flash | Identifies capability gaps, creates durable skills (`SKILL.md`), updates agent souls (`.soul.md`) |
 
+</details>
+
 ---
 
 ## 🚀 Setup & Quick Start
 
-### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm** or **bun**
-- **Gemini API Key**: Obtainable from [Google AI Studio](https://aistudio.google.com/)
-- *(Optional)* **Local Mem0 MCP Server**: If using real MCP mode (e.g. running on `http://localhost:8888/mcp/mcp`)
+The app has **two memory modes** — pick the one that fits your needs before you start:
 
-### 1. Clone & Install Dependencies
+| | Mock mode (default) | Real MCP mode (advanced) |
+|---|---|---|
+| **Extra install?** | None | Mem0 MCP server (Docker or pip) |
+| **Mem0 API key?** | No | Yes (free at [mem0.ai](https://mem0.ai)) |
+| **Memory persists?** | Yes — local `data/mem0_store.json` | Yes — Mem0 cloud |
+| **Semantic search?** | Keyword scoring | True vector search |
+| **Good for** | Local dev, demos, hackathons | Production / cross-machine memory |
+
+**Most users should follow Path A.** Path B is only needed if you want cloud-backed semantic memory.
+
+---
+
+### Path A — Mock mode (recommended, no Mem0 server needed)
+
+#### Prerequisites
+- **Node.js** v22+ (tested on v22.19.0 via `nvm`)
+- **Gemini API Key** — get one free at [Google AI Studio](https://aistudio.google.com/)
+
+#### 1. Clone & install
 ```bash
-git clone https://github.com/your-org/self-improving-research-team.git
-cd self-improving-research-team
+git clone https://github.com/neomatrix369/self-improving-teams.git
+cd self-improving-teams
 npm install
 ```
 
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env`:
+#### 2. Configure `.env`
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` — only one value is required:
 ```env
-# Gemini AI API Key (Required for server-side LLM inference)
+# Required
 GEMINI_API_KEY="your-gemini-api-key-here"
 
-# Mem0 MCP Server HTTP Endpoint (Local Machine)
-MEM0_MCP_URL="http://localhost:8888/mcp/mcp"
+# Leave these commented out — Mock mode needs neither
+# MEM0_MCP_URL="http://localhost:8888/mcp"
+# MEM0_API_KEY="m0-..."
 ```
 
-### 3. Run in Development Mode
+#### 3. Start the app
 ```bash
 npm run dev
 ```
-The application starts at `http://localhost:3000`.
+
+Open **http://localhost:3000**. The **Mem0 Memory Bank** tab will show a **"Mocked (Local)"** badge — all memory operations work immediately, backed by `data/mem0_store.json`.
+
+---
+
+<details>
+<summary>Path B — Real MCP mode (advanced, optional)</summary>
+
+Only follow this if you want true semantic vector search and persistent memory.  
+There are **three sub-options** — pick the one that fits your setup:
+
+| | Option A | Option B | Option C |
+|---|---|---|---|
+| **Mem0 API key** | Required | Required | **Not needed** |
+| **Requires Python** | No | Yes (3.9+) | No |
+| **Requires Docker** | Yes | No | Yes |
+| **Memory stored** | Mem0 cloud | Mem0 cloud | Local (Qdrant) |
+| **Best for** | Cloud + no Python | Cloud + Python | Privacy / offline |
+
+#### 1–2. Clone, install, and configure `.env` (same as Path A)
+
+For **Option A or B** (cloud-backed), add your Mem0 API key:
+```env
+GEMINI_API_KEY="your-gemini-api-key-here"
+MEM0_API_KEY="m0-your-mem0-api-key-here"   # free at https://mem0.ai
+MEM0_MCP_URL="http://localhost:8888/mcp"
+```
+
+For **Option C** (self-hosted, no API key):
+```env
+GEMINI_API_KEY="your-gemini-api-key-here"
+MEM0_MCP_URL="http://localhost:8000"        # points directly at local Mem0 API
+# MEM0_API_KEY not needed
+```
+
+#### 3. Start the Mem0 server — choose one option:
+
+---
+
+**Option A — Docker + Mem0 cloud** (no Python required)
+```bash
+# One-time: clone and build the MCP image
+git clone https://github.com/mem0ai/mem0-mcp.git
+cd mem0-mcp && docker build -t mem0-mcp-server . && cd ..
+
+# Start (keep this terminal open alongside the app)
+docker run --rm -d \
+  --name mem0-mcp \
+  -e MEM0_API_KEY="m0-your-mem0-api-key-here" \
+  -e MEM0_DEFAULT_USER_ID="self-improving-teams" \
+  -e HOST="0.0.0.0" \
+  -e PORT="8081" \
+  -p 8888:8081 \
+  mem0-mcp-server
+
+curl -s http://localhost:8888/mcp   # verify: should return a JSON-RPC response
+docker stop mem0-mcp                # stop when done
+```
+
+---
+
+**Option B — pip / uv + Mem0 cloud** (Python 3.9+)
+```bash
+pip install mem0-mcp-server          # or: uv pip install mem0-mcp-server
+
+# Start (keep this terminal open alongside the app)
+export MEM0_API_KEY="m0-your-mem0-api-key-here"
+export MEM0_DEFAULT_USER_ID="self-improving-teams"
+export HOST="0.0.0.0"
+export PORT="8888"
+uvx mem0-mcp-server                  # or: python -m mem0_mcp_server
+
+curl -s http://localhost:8888/mcp   # verify
+```
+
+---
+
+**Option C — Self-hosted with Docker Compose** (fully local, no API key)
+
+This starts a local [Qdrant](https://qdrant.tech/) vector database and the Mem0 REST API entirely on your machine — nothing leaves your network.
+
+```bash
+# One-time: clone the main mem0 repo
+git clone https://github.com/mem0ai/mem0.git
+cd mem0
+
+# Start Qdrant (:6333) and the Mem0 API (:8000) together
+docker compose up -d
+
+# Verify both are up
+curl -s http://localhost:8000/v1/memories/   # Mem0 API
+curl -s http://localhost:6333/healthz        # Qdrant
+```
+
+> With Option C, `MEM0_MCP_URL` in `.env` should be `http://localhost:8000` (the Mem0 REST API directly) and no `MEM0_API_KEY` is required.
+
+Stop when done:
+```bash
+docker compose down   # run from inside the mem0/ clone directory
+```
+
+---
+
+#### 4. Start the app and switch to Real MCP
+```bash
+npm run dev
+```
+
+Open **http://localhost:3000** → **Mem0 Memory Bank** tab → click **"Real MCP Server"**. The badge shows the active endpoint and latency. The app falls back to Mock mode automatically if the server is unreachable.
+
+</details>
 
 ### 4. Build for Production
 ```bash
@@ -183,7 +310,8 @@ npm start
 
 ---
 
-## 🧠 Mem0 MCP Integration
+<details>
+<summary>🧠 Mem0 MCP Integration</summary>
 
 The application contains a unified Mem0 engine (`server/mem0Store.ts`) that handles both local development and live enterprise MCP endpoints.
 
@@ -202,9 +330,12 @@ The application contains a unified Mem0 engine (`server/mem0Store.ts`) that hand
 - **In UI**: Open the **Mem0 Memory Bank** tab and click **"Mocked (Local)"** or **"Real MCP Server"**.
 - **In CLI**: Run `memory mode real` or `memory mode mock`.
 
+</details>
+
 ---
 
-## 🛠 Repository Structure
+<details>
+<summary>🛠 Repository Structure</summary>
 
 ```
 .
@@ -230,9 +361,12 @@ The application contains a unified Mem0 engine (`server/mem0Store.ts`) that hand
 └── vite.config.ts          # Vite bundler configuration
 ```
 
+</details>
+
 ---
 
-## 💻 CLI & API Reference
+<details>
+<summary>💻 CLI & API Reference</summary>
 
 ### CLI Terminal Commands
 The built-in CLI Console allows rapid agent orchestration and inspection:
@@ -250,6 +384,8 @@ The built-in CLI Console allows rapid agent orchestration and inspection:
 - `POST /api/mem0/test-connection`: Ping target MCP server and measure latency.
 - `GET /api/mem0/memories`: Query or search stored memories.
 - `GET /api/skills`: List all active `SKILL.md` files.
+
+</details>
 
 ---
 

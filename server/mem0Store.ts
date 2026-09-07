@@ -20,7 +20,7 @@ const KNOWN_MEM0_TOOLS: Mem0ToolInfo[] = [
 class Mem0McpStore {
   private memories: Mem0Memory[] = [];
   private mode: 'mock' | 'real' = 'mock';
-  private mcpUrl: string = process.env.MEM0_MCP_URL || 'http://localhost:8888/mcp/mcp';
+  private mcpUrl: string = process.env.MEM0_MCP_URL || 'http://localhost:8888/mcp';
   
   private isConnected: boolean = false;
   private latencyMs: number = 0;
