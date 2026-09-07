@@ -50,7 +50,8 @@ Browse the full [screenshot gallery](docs/screenshots/README.md) for all UI surf
 
 ---
 
-## 🏛 Architecture Diagram
+<details>
+<summary>🏛 Architecture Diagram</summary>
 
 ```
                              +-----------------------------------+
@@ -83,7 +84,7 @@ Browse the full [screenshot gallery](docs/screenshots/README.md) for all UI surf
 |  |                         Unified Mem0 MCP Client & Store                                 |  |
 |  |                                                                                         |  |
 |  |  Mode: [ Mocked Local Store <──────── 1-Click Toggle ────────> Real MCP Server ]       |  |
-|  |  Endpoint: process.env.MEM0_MCP_URL (http://localhost:8888/mcp/mcp)                     |  |
+|  |  Endpoint: process.env.MEM0_MCP_URL (http://localhost:8888/mcp)                        |  |
 |  |  Transport: HTTP JSON-RPC 2.0 (Auth: none)                                              |  |
 |  +-----------------------------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------------------------+
@@ -113,6 +114,8 @@ graph TD
     StoreMem0 --> FinalReport[Durable Markdown Synthesis Report]
 ```
 
+</details>
+
 ---
 
 ## ⚡ Key Capabilities
@@ -128,7 +131,8 @@ graph TD
 
 ---
 
-## 🤖 Agent Hierarchy & Roles
+<details>
+<summary>🤖 Agent Hierarchy & Roles</summary>
 
 | Agent | Model | Primary Responsibility |
 | :--- | :--- | :--- |
@@ -136,6 +140,8 @@ graph TD
 | **Scout** | Gemini 3.7 Flash | Discovers primary domain sources, identifies technical trade-offs, gathers core evidence |
 | **Critic** | Gemini 3.7 Flash | Verifies claims, conducts hallucination audits, calculates confidence scores |
 | **Hermes-like agent** | Gemini 3.7 Flash | Identifies capability gaps, creates durable skills (`SKILL.md`), updates agent souls (`.soul.md`) |
+
+</details>
 
 ---
 
@@ -192,7 +198,8 @@ Open **http://localhost:3000**. The **Mem0 Memory Bank** tab will show a **"Mock
 
 ---
 
-### Path B — Real MCP mode (advanced, optional)
+<details>
+<summary>Path B — Real MCP mode (advanced, optional)</summary>
 
 Only follow this if you want true semantic vector search and persistent memory.  
 There are **three sub-options** — pick the one that fits your setup:
@@ -296,6 +303,8 @@ npm run dev
 
 Open **http://localhost:3000** → **Mem0 Memory Bank** tab → click **"Real MCP Server"**. The badge shows the active endpoint and latency. The app falls back to Mock mode automatically if the server is unreachable.
 
+</details>
+
 ### 4. Build for Production
 ```bash
 npm run build
@@ -304,7 +313,8 @@ npm start
 
 ---
 
-## 🧠 Mem0 MCP Integration
+<details>
+<summary>🧠 Mem0 MCP Integration</summary>
 
 The application contains a unified Mem0 engine (`server/mem0Store.ts`) that handles both local development and live enterprise MCP endpoints.
 
@@ -323,9 +333,12 @@ The application contains a unified Mem0 engine (`server/mem0Store.ts`) that hand
 - **In UI**: Open the **Mem0 Memory Bank** tab and click **"Mocked (Local)"** or **"Real MCP Server"**.
 - **In CLI**: Run `memory mode real` or `memory mode mock`.
 
+</details>
+
 ---
 
-## 🛠 Repository Structure
+<details>
+<summary>🛠 Repository Structure</summary>
 
 ```
 .
@@ -351,9 +364,12 @@ The application contains a unified Mem0 engine (`server/mem0Store.ts`) that hand
 └── vite.config.ts          # Vite bundler configuration
 ```
 
+</details>
+
 ---
 
-## 💻 CLI & API Reference
+<details>
+<summary>💻 CLI & API Reference</summary>
 
 ### CLI Terminal Commands
 The built-in CLI Console allows rapid agent orchestration and inspection:
@@ -371,6 +387,8 @@ The built-in CLI Console allows rapid agent orchestration and inspection:
 - `POST /api/mem0/test-connection`: Ping target MCP server and measure latency.
 - `GET /api/mem0/memories`: Query or search stored memories.
 - `GET /api/skills`: List all active `SKILL.md` files.
+
+</details>
 
 ---
 
