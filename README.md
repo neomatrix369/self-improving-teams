@@ -194,27 +194,40 @@ Open **http://localhost:3000**. The **Mem0 Memory Bank** tab will show a **"Mock
 
 ### Path B — Real MCP mode (advanced, optional)
 
-Only follow this if you want cloud-backed semantic vector search via the Mem0 API.
+Only follow this if you want true semantic vector search and persistent memory.  
+There are **three sub-options** — pick the one that fits your setup:
 
-#### Prerequisites (in addition to Path A)
-- A free **Mem0 API key** — sign up at [mem0.ai](https://mem0.ai), copy the key (starts with `m0-`)
-- Either **Docker Desktop** or **Python 3.9+**
+| | Option A | Option B | Option C |
+|---|---|---|---|
+| **Mem0 API key** | Required | Required | **Not needed** |
+| **Requires Python** | No | Yes (3.9+) | No |
+| **Requires Docker** | Yes | No | Yes |
+| **Memory stored** | Mem0 cloud | Mem0 cloud | Local (Qdrant) |
+| **Best for** | Cloud + no Python | Cloud + Python | Privacy / offline |
 
-#### 1–2. Clone, install, and configure `.env` (same as Path A, but uncomment Mem0 vars)
+#### 1–2. Clone, install, and configure `.env` (same as Path A)
+
+For **Option A or B** (cloud-backed), add your Mem0 API key:
 ```env
-# Required
 GEMINI_API_KEY="your-gemini-api-key-here"
-
-# Required for Real MCP mode
-MEM0_API_KEY="m0-your-mem0-api-key-here"
+MEM0_API_KEY="m0-your-mem0-api-key-here"   # free at https://mem0.ai
 MEM0_MCP_URL="http://localhost:8888/mcp"
 ```
 
-#### 3. Start the Mem0 MCP server — choose one:
+For **Option C** (self-hosted, no API key):
+```env
+GEMINI_API_KEY="your-gemini-api-key-here"
+MEM0_MCP_URL="http://localhost:8000"        # points directly at local Mem0 API
+# MEM0_API_KEY not needed
+```
 
-**Option A — Docker** (no Python required)
+#### 3. Start the Mem0 server — choose one option:
+
+---
+
+**Option A — Docker + Mem0 cloud** (no Python required)
 ```bash
-# One-time: clone and build the image
+# One-time: clone and build the MCP image
 git clone https://github.com/mem0ai/mem0-mcp.git
 cd mem0-mcp && docker build -t mem0-mcp-server . && cd ..
 
@@ -232,7 +245,9 @@ curl -s http://localhost:8888/mcp   # verify: should return a JSON-RPC response
 docker stop mem0-mcp                # stop when done
 ```
 
-**Option B — pip / uv** (Python 3.9+)
+---
+
+**Option B — pip / uv + Mem0 cloud** (Python 3.9+)
 ```bash
 pip install mem0-mcp-server          # or: uv pip install mem0-mcp-server
 
@@ -246,12 +261,40 @@ uvx mem0-mcp-server                  # or: python -m mem0_mcp_server
 curl -s http://localhost:8888/mcp   # verify
 ```
 
+---
+
+**Option C — Self-hosted with Docker Compose** (fully local, no API key)
+
+This starts a local [Qdrant](https://qdrant.tech/) vector database and the Mem0 REST API entirely on your machine — nothing leaves your network.
+
+```bash
+# One-time: clone the main mem0 repo
+git clone https://github.com/mem0ai/mem0.git
+cd mem0
+
+# Start Qdrant (:6333) and the Mem0 API (:8000) together
+docker compose up -d
+
+# Verify both are up
+curl -s http://localhost:8000/v1/memories/   # Mem0 API
+curl -s http://localhost:6333/healthz        # Qdrant
+```
+
+> With Option C, `MEM0_MCP_URL` in `.env` should be `http://localhost:8000` (the Mem0 REST API directly) and no `MEM0_API_KEY` is required.
+
+Stop when done:
+```bash
+docker compose down   # run from inside the mem0/ clone directory
+```
+
+---
+
 #### 4. Start the app and switch to Real MCP
 ```bash
 npm run dev
 ```
 
-Open **http://localhost:3000** → **Mem0 Memory Bank** tab → click **"Real MCP Server"**. The badge will update to show latency. The app falls back to Mock mode automatically if the server is unreachable.
+Open **http://localhost:3000** → **Mem0 Memory Bank** tab → click **"Real MCP Server"**. The badge shows the active endpoint and latency. The app falls back to Mock mode automatically if the server is unreachable.
 
 ### 4. Build for Production
 ```bash
