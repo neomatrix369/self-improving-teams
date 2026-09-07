@@ -141,16 +141,18 @@ graph TD
 
 ## 🚀 Setup & Quick Start
 
+> **TL;DR — want to try it quickly?** The app starts in **Mock mode** by default, so you can explore every panel without configuring the Mem0 server at all. Only follow the Mem0 section below when you want durable, real memory across research runs.
+
 ### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm** or **bun**
+- **Node.js**: v22.0.0 or higher (tested on v22.19.0 via `nvm`)
+- **npm** (bundled with Node) or **bun**
 - **Gemini API Key**: Obtainable from [Google AI Studio](https://aistudio.google.com/)
-- *(Optional)* **Local Mem0 MCP Server**: If using real MCP mode (e.g. running on `http://localhost:8888/mcp/mcp`)
+- *(Optional — real MCP mode only)* **Python 3.9+** and the **Mem0 MCP server** — see Step 3a below
 
 ### 1. Clone & Install Dependencies
 ```bash
-git clone https://github.com/your-org/self-improving-research-team.git
-cd self-improving-research-team
+git clone https://github.com/neomatrix369/self-improving-teams.git
+cd self-improving-teams
 npm install
 ```
 
@@ -160,20 +162,48 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` and fill in your key:
 ```env
-# Gemini AI API Key (Required for server-side LLM inference)
+# Required — Gemini AI API Key (get one at https://aistudio.google.com/)
 GEMINI_API_KEY="your-gemini-api-key-here"
 
-# Mem0 MCP Server HTTP Endpoint (Local Machine)
+# Optional — only needed when switching to Real MCP mode (see Step 3a)
 MEM0_MCP_URL="http://localhost:8888/mcp/mcp"
 ```
 
-### 3. Run in Development Mode
+### 3a. (Optional) Start the Mem0 MCP Server
+
+The app runs fully in **Mock mode** without this step — memories are stored in a local JSON file and survive server restarts. Switch to Real MCP mode when you want the full Mem0 semantic-search stack.
+
+**Install the Mem0 MCP server** (Python package, one-time):
+```bash
+pip install mem0ai
+```
+
+**Start the server** (keep this terminal open alongside the app):
+```bash
+mem0 server --port 8888
+```
+
+Verify it is healthy before starting the app:
+```bash
+curl -s http://localhost:8888/health   # expected: {"status":"ok"} or similar
+```
+
+> The app reads `MEM0_MCP_URL` from `.env` (`http://localhost:8888/mcp/mcp`). If the server is not running the app falls back to Mock mode automatically.
+
+### 3b. Run in Development Mode
 ```bash
 npm run dev
 ```
-The application starts at `http://localhost:3000`.
+The application starts at **http://localhost:3000**.
+
+**Startup checklist:**
+1. Mem0 server running on port 8888 *(if using real MCP mode)*
+2. `GEMINI_API_KEY` set in `.env`
+3. `npm run dev` — open `http://localhost:3000`
+
+To confirm everything is wired up, open the **Mem0 Memory Bank** tab and check the connection badge — it shows **Mocked (Local)** or **Real MCP Server** and a latency ping.
 
 ### 4. Build for Production
 ```bash
