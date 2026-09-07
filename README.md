@@ -141,61 +141,84 @@ graph TD
 
 ## 🚀 Setup & Quick Start
 
-> **TL;DR — want to try it quickly?** The app starts in **Mock mode** by default, so you can explore every panel without configuring the Mem0 server at all. Only follow the Mem0 section below when you want durable, real memory across research runs.
+The app has **two memory modes** — pick the one that fits your needs before you start:
 
-### Prerequisites
-- **Node.js**: v22.0.0 or higher (tested on v22.19.0 via `nvm`)
-- **npm** (bundled with Node) or **bun**
-- **Gemini API Key**: Obtainable from [Google AI Studio](https://aistudio.google.com/)
-- *(Optional — real MCP mode only)* **Python 3.9+** and the **Mem0 MCP server** — see Step 3a below
+| | Mock mode (default) | Real MCP mode (advanced) |
+|---|---|---|
+| **Extra install?** | None | Mem0 MCP server (Docker or pip) |
+| **Mem0 API key?** | No | Yes (free at [mem0.ai](https://mem0.ai)) |
+| **Memory persists?** | Yes — local `data/mem0_store.json` | Yes — Mem0 cloud |
+| **Semantic search?** | Keyword scoring | True vector search |
+| **Good for** | Local dev, demos, hackathons | Production / cross-machine memory |
 
-### 1. Clone & Install Dependencies
+**Most users should follow Path A.** Path B is only needed if you want cloud-backed semantic memory.
+
+---
+
+### Path A — Mock mode (recommended, no Mem0 server needed)
+
+#### Prerequisites
+- **Node.js** v22+ (tested on v22.19.0 via `nvm`)
+- **Gemini API Key** — get one free at [Google AI Studio](https://aistudio.google.com/)
+
+#### 1. Clone & install
 ```bash
 git clone https://github.com/neomatrix369/self-improving-teams.git
 cd self-improving-teams
 npm install
 ```
 
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env`:
+#### 2. Configure `.env`
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your keys:
+Edit `.env` — only one value is required:
 ```env
-# Required — Gemini AI API Key (get one at https://aistudio.google.com/)
+# Required
 GEMINI_API_KEY="your-gemini-api-key-here"
 
-# Optional — only needed when switching to Real MCP mode (see Step 3a)
-# Must match whatever host:port you start the Mem0 server on below
-MEM0_MCP_URL="http://localhost:8888/mcp"
-
-# Optional — your Mem0 account API key (required by the Mem0 MCP server itself)
-# Sign up free at https://mem0.ai to get one (starts with m0-)
-MEM0_API_KEY="m0-your-mem0-api-key-here"
+# Leave these commented out — Mock mode needs neither
+# MEM0_MCP_URL="http://localhost:8888/mcp"
+# MEM0_API_KEY="m0-..."
 ```
 
-### 3a. (Advanced / Optional) Start the Mem0 MCP Server
+#### 3. Start the app
+```bash
+npm run dev
+```
 
-**You do not need this to run the app.** Mock mode is the default and stores all memories in `data/mem0_store.json` on disk — add, search, delete, and history all work without any external server. The Mem0 MCP server only adds cloud-backed semantic vector search and cross-machine memory persistence.
-
-Only continue here if you specifically want those features. You will need a free **Mem0 API key** from [mem0.ai](https://mem0.ai) (starts with `m0-`) — add it to `.env` as `MEM0_API_KEY`.
-
-Choose **one** install path:
+Open **http://localhost:3000**. The **Mem0 Memory Bank** tab will show a **"Mocked (Local)"** badge — all memory operations work immediately, backed by `data/mem0_store.json`.
 
 ---
 
-#### Option A — Docker (no Python required)
+### Path B — Real MCP mode (advanced, optional)
 
-Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) running.
+Only follow this if you want cloud-backed semantic vector search via the Mem0 API.
 
+#### Prerequisites (in addition to Path A)
+- A free **Mem0 API key** — sign up at [mem0.ai](https://mem0.ai), copy the key (starts with `m0-`)
+- Either **Docker Desktop** or **Python 3.9+**
+
+#### 1–2. Clone, install, and configure `.env` (same as Path A, but uncomment Mem0 vars)
+```env
+# Required
+GEMINI_API_KEY="your-gemini-api-key-here"
+
+# Required for Real MCP mode
+MEM0_API_KEY="m0-your-mem0-api-key-here"
+MEM0_MCP_URL="http://localhost:8888/mcp"
+```
+
+#### 3. Start the Mem0 MCP server — choose one:
+
+**Option A — Docker** (no Python required)
 ```bash
 # One-time: clone and build the image
 git clone https://github.com/mem0ai/mem0-mcp.git
 cd mem0-mcp && docker build -t mem0-mcp-server . && cd ..
 
-# Start the server (keep this terminal open)
+# Start (keep this terminal open alongside the app)
 docker run --rm -d \
   --name mem0-mcp \
   -e MEM0_API_KEY="m0-your-mem0-api-key-here" \
@@ -205,46 +228,30 @@ docker run --rm -d \
   -p 8888:8081 \
   mem0-mcp-server
 
-# Verify
-curl -s http://localhost:8888/mcp   # should return a JSON-RPC response
-
-# Stop when done
-docker stop mem0-mcp
+curl -s http://localhost:8888/mcp   # verify: should return a JSON-RPC response
+docker stop mem0-mcp                # stop when done
 ```
 
-#### Option B — pip / uv (Python 3.9+)
-
+**Option B — pip / uv** (Python 3.9+)
 ```bash
-# Install (one-time)
 pip install mem0-mcp-server          # or: uv pip install mem0-mcp-server
 
-# Start the server (keep this terminal open)
+# Start (keep this terminal open alongside the app)
 export MEM0_API_KEY="m0-your-mem0-api-key-here"
 export MEM0_DEFAULT_USER_ID="self-improving-teams"
 export HOST="0.0.0.0"
 export PORT="8888"
 uvx mem0-mcp-server                  # or: python -m mem0_mcp_server
 
-# Verify
-curl -s http://localhost:8888/mcp   # should return a JSON-RPC response
+curl -s http://localhost:8888/mcp   # verify
 ```
 
----
-
-Once the server is up, open the **Mem0 Memory Bank** tab in the UI and click **"Real MCP Server"** to switch modes. The app falls back to Mock mode automatically if the server is unreachable.
-
-### 3b. Run in Development Mode
+#### 4. Start the app and switch to Real MCP
 ```bash
 npm run dev
 ```
-The application starts at **http://localhost:3000**.
 
-**Startup checklist:**
-1. Mem0 server running on port 8888 *(if using real MCP mode)*
-2. `GEMINI_API_KEY` set in `.env`
-3. `npm run dev` — open `http://localhost:3000`
-
-To confirm everything is wired up, open the **Mem0 Memory Bank** tab and check the connection badge — it shows **Mocked (Local)** or **Real MCP Server** and a latency ping.
+Open **http://localhost:3000** → **Mem0 Memory Bank** tab → click **"Real MCP Server"**. The badge will update to show latency. The app falls back to Mock mode automatically if the server is unreachable.
 
 ### 4. Build for Production
 ```bash
